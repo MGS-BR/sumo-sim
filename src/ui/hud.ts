@@ -101,7 +101,8 @@ export class Hud {
   }
 
   toast(text: string, team: number | null = null) {
-    const t = h('div', 'hud-toast', text);
+    const t = h('div', 'hud-toast');
+    t.textContent = text; // texto puro: nunca interpretar como HTML
     if (team !== null) t.dataset.team = String(team);
     this.toasts.prepend(t);
     setTimeout(() => t.classList.add('out'), 3500);
@@ -130,7 +131,8 @@ export class Hud {
 
     // mensagens persistentes por fase (quando não há flash ativo)
     // no posicionamento o título fica pequeno no topo para não cobrir os robôs
-    this.center.classList.toggle('compact', s.phase === 'placement' && !replaying && this.now > this.flashUntil);
+    // compacto no posicionamento (não cobre os robôs) e no replay (não cobre o lance)
+    this.center.classList.toggle('compact', replaying || (s.phase === 'placement' && this.now > this.flashUntil));
     if (this.now > this.flashUntil) {
       this.center.dataset.team = '';
       this.center.classList.remove('pop');

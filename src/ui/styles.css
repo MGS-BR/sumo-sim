@@ -57,8 +57,8 @@ kbd { font-family: var(--mono); font-size: 0.75em; padding: 1px 6px; border: 1px
 .menu .panel { display: grid; gap: 18px; }
 .field { display: grid; gap: 8px; }
 .lbl { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.seg { display: flex; flex-wrap: wrap; gap: 4px; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
-.seg button { flex: 1 1 auto; border: 0 !important; background: none !important; padding: 9px 10px !important; color: var(--muted); border-radius: 7px !important; }
+.seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.seg button { min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0 !important; background: none !important; padding: 9px 10px !important; color: var(--muted); border-radius: 7px !important; }
 .seg button.on { background: var(--ink) !important; color: #0c0e12; }
 .tog { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; cursor: pointer; padding: 4px 0; }
 .tog input { position: absolute; opacity: 0; pointer-events: none; }
@@ -69,6 +69,8 @@ kbd { font-family: var(--mono); font-size: 0.75em; padding: 1px 6px; border: 1px
 .tog input:focus-visible + span { outline: 2px solid var(--gold); outline-offset: 2px; }
 .tog b { display: block; font-size: .92rem; font-weight: 600; }
 .tog small { color: var(--muted); font-size: .78rem; }
+.vol { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; font-size: .92rem; font-weight: 600; padding: 2px 0; }
+.vol input { width: 100%; accent-color: var(--red); }
 .keys { grid-column: 1 / -1; display: flex; gap: 24px; flex-wrap: wrap; color: var(--muted); font-size: .85rem; }
 .touch-warn { display: none; color: var(--gold); }
 @media (hover: none) and (pointer: coarse) { .touch-warn { display: block; } }
@@ -126,6 +128,15 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
 .ed-derived b { display: block; font: 700 1rem var(--mono); }
 .ed-derived span { font-size: .72rem; color: var(--muted); }
 .ed-note { color: var(--muted); font-size: .76rem; margin: 0; }
+/* no editor o centro da tela é do canvas: a câmera pode ser controlada com o mouse */
+.ui > .screen.editor { pointer-events: none; }
+.ui > .screen.editor > * { pointer-events: auto; }
+.ed-cam { display: grid; gap: 6px; }
+.ed-cam-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.ed-cam-row button { padding: 7px 4px !important; font-size: .78rem; }
+.ed-cam-row [data-act=spin] { grid-column: 1 / -1; }
+.ed-cam-row button.on { background: var(--ink) !important; color: #0c0e12; }
+.ed-cam small { color: var(--muted); font-size: .72rem; }
 
 /* ---------- pausa / resultado */
 .pause, .result { place-items: center; background: rgba(6, 7, 10, .6); }
@@ -201,7 +212,13 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
 /* ---------- telas estreitas */
 @media (max-width: 900px) {
   .screen { padding: 14px; overflow: auto; }
-  .menu, .select, .editor { grid-template-columns: 1fr; align-content: start; }
+  .menu, .select, .editor { grid-template-columns: 1fr; align-content: start; grid-auto-rows: max-content; grid-template-rows: none; }
+  .pick, .ed-panel { max-height: none; overflow: visible; }
+  .select .vs { align-self: auto; justify-self: stretch; }
+  .ed-side { align-self: auto; }
+  /* celular: o topo da tela mostra o robô (e aceita arrastar a câmera); os painéis rolam por baixo */
+  .screen.editor { padding-top: 42vh; }
+  .prm { grid-template-columns: minmax(0, 1fr) minmax(70px, 1fr) 88px; }
   .brand { padding-bottom: 0; }
   .vs { width: auto; flex-direction: row; flex-wrap: wrap; justify-content: center; }
   .vs-mark { font-size: 2.5rem; }

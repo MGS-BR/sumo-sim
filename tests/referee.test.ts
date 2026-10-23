@@ -12,6 +12,7 @@ function robot(over: Partial<RobotFact> = {}): RobotFact {
     movedFromStart: 0,
     turnedFromStart: 0,
     pushing: false,
+    driveEffort: 1,
     radius: 0.1,
     ready: true,
     ...over,
@@ -73,6 +74,15 @@ describe('Juiz — regulamento RoboCore', () => {
     expect(ref.s.scores).toEqual([0, 0]);
   });
 
+  it('saída simultânea com iniciativa clara: o atacante pontua (Art. 13 prevalece)', () => {
+    const ref = new Referee();
+    toFight(ref);
+    run(ref, 0.3, facts({ pushing: true }));
+    const ev = run(ref, 0.1, facts({ pushing: true, touchingOutside: true }, { touchingOutside: true }));
+    expect(ev.find((e) => e.type === 'yuko')).toMatchObject({ to: [0], reason: 'iniciativa' });
+    expect(ev.some((e) => e.type === 'torinaoshi')).toBe(false);
+  });
+
   it('atacante com iniciativa que sai primeiro ainda pontua (Art. 13, item 3)', () => {
     const ref = new Referee();
     toFight(ref);
@@ -103,6 +113,14 @@ describe('Juiz — regulamento RoboCore', () => {
     toFight(ref);
     const ev = run(ref, 3.1, facts({}, { speed: 0 }, { inContact: false, distanceRate: -0.2 }));
     expect(ev.find((e) => e.type === 'yuko')).toMatchObject({ to: [0], reason: 'hansoku-parado' });
+  });
+
+  it('encostado com motor desligado = parado (Art. 17 prevalece sobre o Art. 12)', () => {
+    const ref = new Referee();
+    toFight(ref);
+    const ev = run(ref, 3.1, facts({ speed: 0 }, { speed: 0, driveEffort: 0 }, { inContact: true }));
+    expect(ev.find((e) => e.type === 'yuko')).toMatchObject({ to: [0], reason: 'hansoku-parado' });
+    expect(ev.some((e) => e.type === 'torinaoshi')).toBe(false);
   });
 
   it('travados em contato por 3 s = Torinaoshi (Art. 12)', () => {

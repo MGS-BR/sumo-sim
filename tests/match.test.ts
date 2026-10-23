@@ -54,6 +54,27 @@ describe('posicionamento pelo Match', () => {
   });
 });
 
+describe('evidência do toque fora', () => {
+  it('registra onde e quando o perdedor encostou fora', async () => {
+    const m = await Match.create({ specs: [clonePreset('bloco'), clonePreset('kunai')], mode: MODES.realista });
+    m.step([{ ...EMPTY_FRAME, placeTarget: { x: 0.3, z: 0, yaw: 0 } }, EMPTY_FRAME]);
+    m.step([{ ...EMPTY_FRAME, ready: true }, { ...EMPTY_FRAME, ready: true }]);
+    const go: ControlFrame = { ...EMPTY_FRAME, drive: { left: 1, right: 1 } };
+    let yuko: RefEvent | undefined;
+    for (let k = 0; k < 480 * 6 && !yuko; k++) {
+      const live = m.ref.s.phase === 'fight' || m.ref.s.phase === 'deciding';
+      yuko = m.step(live ? [go, EMPTY_FRAME] : [EMPTY_FRAME, EMPTY_FRAME]).find((e) => e.type === 'yuko');
+    }
+    expect(yuko).toMatchObject({ to: [1] });
+    const t = m.outTouches[0]!;
+    expect(t).not.toBeNull();
+    expect(Math.hypot(t.point.x, t.point.z)).toBeGreaterThan(0.385);
+    // o replay guarda o instante do toque
+    expect(m.replay[0].t).toBeLessThanOrEqual(t.t);
+    m.dispose();
+  });
+});
+
 describe('partida completa bot x bot', () => {
   it('chega ao fim com vencedor e sequência de eventos coerente', async () => {
     const { m, events, t } = await botMatch('trator', 'bloco');

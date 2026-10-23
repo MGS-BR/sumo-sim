@@ -1,7 +1,8 @@
 import { Match } from './sim/match';
 import { PHYSICS_DT, type ModeConfig } from './sim/modes';
 import type { RefEvent, RulesConfig } from './sim/referee';
-import type { ControlFrame, RobotSpec } from './sim/types';
+import type { ControlFrame, RobotSpec, SimSnapshot } from './sim/types';
+import type { OutTouch } from './sim/match';
 import type { Controller } from './control/controller';
 import { KeyboardController, KEYMAPS, KeyboardState } from './control/keyboard';
 import { SparringBot, type BotLevel } from './control/sparringBot';
@@ -35,7 +36,6 @@ export class Game {
   private controllers!: [Controller, Controller];
   private acc = 0;
   paused = false;
-  private replayT = -1;
   private replayStartDelay = -1;
   onEnd: (winner: number | null, reason: string) => void = () => {};
   private pendingEnd: { winner: number | null; reason: string; delay: number } | null = null;
@@ -108,7 +108,7 @@ export class Game {
     if (this.keys.consume('F2')) this.setDebug(!this.opts.debug);
 
     if (!this.paused) {
-      if (this.replayT >= 0) this.stepReplay(realDt);
+      if (this.rp) this.stepReplay(realDt);
       else if (this.replayStartDelay >= 0) {
         this.replayStartDelay -= realDt;
         this.simulate(realDt * 0.25); // desacelera enquanto o replay "engata"
@@ -126,10 +126,30 @@ export class Game {
     }
 
     const s = m.lastSnapshot;
-    const [a, b] = s.robots;
-    if (this.replayT < 0) this.view.applySnapshot(s);
-    this.view.updateCamera(realDt, { x: (a.position.x + b.position.x) / 2, z: (a.position.z + b.position.z) / 2 });
-    this.hud.update(realDt, m.ref, s, this.opts.specs, this.replayT >= 0);
+    const phase = m.ref.s.phase;
+    if (!this.rp) {
+      this.view.applySnapshot(s);
+      // marca ao vivo onde o primeiro robô encostou fora (fica até o próximo posicionamento)
+      const touch = this.firstTouch();
+      this.view.setEvidence(touch && (phase === 'deciding' || phase === 'point' || phase === 'over') ? touch.touch.point : null);
+    }
+    const focus = this.rp?.focus ?? {
+      x: (s.robots[0].position.x + s.robots[1].position.x) / 2,
+      z: (s.robots[0].position.z + s.robots[1].position.z) / 2,
+    };
+    this.view.updateCamera(realDt, focus);
+    this.hud.update(realDt, m.ref, s, this.opts.specs, !!this.rp);
+
+    const audible = !this.paused && !this.rp && phase !== 'placement';
+    this.sfx.updateLoops(audible ? s : null, this.opts.specs, this.replayStartDelay >= 0 ? this.opts.mode.timeScale * 0.25 : this.opts.mode.timeScale);
+  }
+
+  /** Primeiro toque fora do round atual */
+  private firstTouch(): { who: number; touch: OutTouch } | null {
+    const [a, b] = this.match.outTouches;
+    if (a && (!b || a.t <= b.t)) return { who: 0, touch: a };
+    if (b) return { who: 1, touch: b };
+    return null;
   }
 
   private simulate(realDt: number) {
@@ -144,10 +164,28 @@ export class Game {
       ) as [ControlFrame, ControlFrame];
       if (m.ref.s.phase === 'placement') this.mouse?.apply(frames);
       const events = m.step(frames);
+      this.detectImpact(m.lastSnapshot);
       if (events.length) this.handleEvents(events);
       if (this.replayStartDelay >= 0) break;
     }
     if (n === MAX_STEPS_PER_FRAME) this.acc = 0; // máquina lenta: não acumula atraso
+  }
+
+  private wasInContact = false;
+  private impactCooldown = 0;
+  /** Batida quando os robôs se encostam, proporcional à velocidade de aproximação */
+  private detectImpact(s: SimSnapshot) {
+    this.impactCooldown -= PHYSICS_DT;
+    if (s.inContact && !this.wasInContact && this.impactCooldown <= 0 && this.match.ref.s.phase !== 'placement') {
+      const [a, b] = s.robots;
+      const dx = b.position.x - a.position.x;
+      const dz = b.position.z - a.position.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const closing = ((a.linvel.x - b.linvel.x) * dx + (a.linvel.z - b.linvel.z) * dz) / d;
+      this.sfx.impact(closing / 1.6);
+      this.impactCooldown = 0.08;
+    }
+    this.wasInContact = s.inContact;
   }
 
   private handleEvents(events: RefEvent[]) {
@@ -182,6 +220,11 @@ export class Game {
           const big = e.reason === 'yusei' ? 'YUSEI' : e.reason === 'shinitai' ? 'SHINITAI' : e.reason.startsWith('hansoku') ? 'HANSOKU' : 'YUKO!';
           this.hud.flash(big, sub, team, 2.6);
           const physicalPoint = e.reason === 'yuko' || e.reason === 'iniciativa';
+          // evidência: o toque fora de quem perdeu o ponto
+          const loser = both ? null : 1 - e.to[0];
+          const touch = loser !== null ? this.match.outTouches[loser] : null;
+          this.evidence = physicalPoint && touch ? { who: loser!, touch } : null;
+          if (this.evidence) this.hud.toast(`${TEAM[this.evidence.who]} encostou fora do dohyo`, this.evidence.who);
           if (this.opts.replay && physicalPoint && this.match.replay.length > 20) this.replayStartDelay = 0.6;
           break;
         }
@@ -210,43 +253,93 @@ export class Game {
     }
   }
 
+  private evidence: { who: number; touch: OutTouch } | null = null;
+  private rp: {
+    t: number;
+    start: number;
+    end: number;
+    hold: number;
+    held: boolean;
+    focus: { x: number; z: number };
+  } | null = null;
+
   private beginReplay() {
     this.replayStartDelay = -1;
-    this.replayT = 0;
+    const frames = this.match.replay;
+    if (!frames.length) return;
+    const t0 = frames[0].t;
+    const t1 = frames[frames.length - 1].t;
+    const ev = this.evidence;
+    // com evidência: começa antes do toque, congela no toque, termina logo depois
+    const start = Math.max(t0, ev ? ev.touch.t - 1.3 : t1 - 2.6);
+    const end = ev ? Math.min(t1, ev.touch.t + 0.6) : t1;
+    this.rp = { t: start, start, end, hold: 0, held: false, focus: { x: 0, z: 0 } };
+    this.view.setEvidence(null);
     this.keys.clearPressed();
   }
 
   get replaying() {
-    return this.replayT >= 0 || this.replayStartDelay >= 0;
+    return !!this.rp || this.replayStartDelay >= 0;
   }
 
   private stepReplay(realDt: number) {
+    const rp = this.rp!;
     const frames = this.match.replay;
-    if (!frames.length) return this.endReplay();
-    const t0 = frames[0].t;
-    const t1 = frames[frames.length - 1].t;
-    const start = Math.max(t0, t1 - 2.6);
-    this.replayT += realDt * REPLAY_SPEED;
-    const t = start + this.replayT;
-    if (t >= t1 || this.keys.down.size > 0 && this.replayT > 0.15) return this.endReplay();
-    // busca binária do quadro
+    const ev = this.evidence;
+    // pula com uma tecla apertada DEPOIS do início do replay (quem segura o W não perde o lance)
+    if (this.keys.anyPressed() && rp.t - rp.start > 0.05) return this.endReplay();
+    if (rp.hold > 0) {
+      rp.hold -= realDt;
+    } else {
+      const next = rp.t + realDt * REPLAY_SPEED;
+      if (ev && !rp.held && next >= ev.touch.t) {
+        // congela no instante do toque e destaca o ponto
+        rp.t = ev.touch.t;
+        rp.held = true;
+        rp.hold = 1.6;
+        this.view.setEvidence(ev.touch.point);
+        this.sfx.click();
+        this.hud.flash('TOCOU FORA', `${TEAM[ev.who]} encostou no chão fora do dohyo`, ev.who, 1.6);
+      } else rp.t = next;
+    }
+    if (rp.t >= rp.end && rp.hold <= 0) return this.endReplay();
+
     let lo = 0;
     let hi = frames.length - 1;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (frames[mid].t < t) lo = mid + 1;
+      if (frames[mid].t < rp.t) lo = mid + 1;
       else hi = mid;
     }
-    this.view.applyReplay(frames[lo]);
+    const f = frames[lo];
+    this.view.applyReplay(f);
+    rp.focus = { x: (f.pos[0].x + f.pos[1].x) / 2, z: (f.pos[0].z + f.pos[1].z) / 2 };
+
+    // câmera: acompanha a luta e, perto do toque, aproxima rente ao chão no ponto
+    if (ev && rp.t >= ev.touch.t - 0.35) {
+      const p = ev.touch.point;
+      const r = Math.hypot(p.x, p.z) || 1;
+      const ox = p.x / r;
+      const oz = p.z / r;
+      this.view.setCameraOverride({
+        pos: { x: p.x + ox * 0.11 - oz * 0.06, y: 0.05, z: p.z + oz * 0.11 + ox * 0.06 },
+        look: { x: p.x - ox * 0.01, y: 0.006, z: p.z - oz * 0.01 },
+      });
+      if (rp.t >= ev.touch.t) this.view.setEvidence(p);
+    } else this.view.setCameraOverride(null);
   }
 
   private endReplay() {
-    this.replayT = -1;
+    this.rp = null;
+    this.view.setCameraOverride(null);
     this.view.setDebug(this.opts.debug);
     this.keys.clearPressed();
   }
 
   dispose() {
+    this.sfx.updateLoops(null, null);
+    this.view.setEvidence(null);
+    this.view.setCameraOverride(null);
     this.mouse?.dispose();
     this.mouse = null;
     this.hud.onReady = () => {};

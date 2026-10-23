@@ -18,7 +18,7 @@ export const PRESETS: RobotSpec[] = [
     height: 0.045,
     frontAngleDeg: 28,
     groundClearance: 0.003,
-    blade: { angleDeg: 28, height: 0.012, edgeClearance: 0, friction: 0.2 },
+    blade: { angleDeg: 28, length: 0.0256, width: 0.098, edgeClearance: 0, friction: 0.2 },
     wheels: { count: 2, radius: 0.016, width: 0.012, friction: 1.1 },
     motor: { freeRpm: 800, stallTorque: kgfcm(2.4) },
     mass: 0.495,
@@ -37,7 +37,7 @@ export const PRESETS: RobotSpec[] = [
     height: 0.05,
     frontAngleDeg: 72,
     groundClearance: 0.004,
-    blade: { angleDeg: 30, height: 0.014, edgeClearance: 0.0005, friction: 0.2 },
+    blade: { angleDeg: 30, length: 0.028, width: 0.099, edgeClearance: 0.0005, friction: 0.2 },
     wheels: { count: 4, radius: 0.0145, width: 0.011, friction: 1.1 },
     motor: { freeRpm: 400, stallTorque: kgfcm(3.7) },
     mass: 0.498,
@@ -56,7 +56,7 @@ export const PRESETS: RobotSpec[] = [
     height: 0.036,
     frontAngleDeg: 40,
     groundClearance: 0.003,
-    blade: { angleDeg: 20, height: 0.01, edgeClearance: 0.0002, friction: 0.18 },
+    blade: { angleDeg: 20, length: 0.0292, width: 0.099, edgeClearance: 0.0002, friction: 0.18 },
     wheels: { count: 4, radius: 0.0135, width: 0.012, friction: 1.2 },
     motor: { freeRpm: 600, stallTorque: kgfcm(3.0) },
     mass: 0.5,
@@ -65,6 +65,15 @@ export const PRESETS: RobotSpec[] = [
     bodyFriction: 0.4,
   },
 ];
+
+/** Altura vertical da lâmina derivada do comprimento e do ângulo */
+export function bladeHeight(spec: RobotSpec): number {
+  return spec.blade.length * Math.sin((spec.blade.angleDeg * Math.PI) / 180);
+}
+/** Profundidade horizontal da lâmina */
+export function bladeDepth(spec: RobotSpec): number {
+  return spec.blade.length * Math.cos((spec.blade.angleDeg * Math.PI) / 180);
+}
 
 export function clonePreset(id: string): RobotSpec {
   const p = PRESETS.find((p) => p.id === id) ?? PRESETS[0];

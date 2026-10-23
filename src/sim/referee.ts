@@ -76,6 +76,8 @@ export interface RobotFact {
   turnedFromStart: number;
   /** Em contato e avançando sobre o oponente */
   pushing: boolean;
+  /** Acionamento dos motores (0..1). Robô sem acionamento "não se move" (Art. 17), mesmo encostado */
+  driveEffort: number;
   /** Distância ao centro do dohyo (m) */
   radius: number;
   ready: boolean;
@@ -272,7 +274,9 @@ export class Referee {
     const outNow = [a.touchingOutside, b.touchingOutside];
     if (!this.firstOut) {
       if (outNow[0] && outNow[1]) {
-        this.torinaoshi('os dois robôs tocaram fora ao mesmo tempo');
+        const w = this.initiativeWinner();
+        if (w !== null) this.award([w], 'iniciativa');
+        else this.torinaoshi('os dois robôs tocaram fora ao mesmo tempo');
         return;
       }
       for (const i of [0, 1]) {
@@ -298,10 +302,13 @@ export class Referee {
         const r = f.robots[i];
         cnt.shinitai[i] = r.hangingWheels > 0 && !r.touchingOutside ? cnt.shinitai[i] + f.dt : 0;
         const idle = r.speed < R.idleSpeed && r.angSpeed < R.idleAngSpeed;
-        cnt.parado[i] = idle && !f.inContact ? cnt.parado[i] + f.dt : 0;
+        // Encostado e parado só é "travado" se o motor está fazendo força; motor desligado = parado
+        const inert = r.driveEffort < 0.05;
+        cnt.parado[i] = idle && (!f.inContact || inert) ? cnt.parado[i] + f.dt : 0;
       }
       const bothIdle = a.speed < R.idleSpeed * 1.5 && b.speed < R.idleSpeed * 1.5;
-      cnt.travados = f.inContact && bothIdle ? cnt.travados + f.dt : 0;
+      const bothDriving = a.driveEffort >= 0.05 && b.driveEffort >= 0.05;
+      cnt.travados = f.inContact && bothIdle && bothDriving ? cnt.travados + f.dt : 0;
       const bothMoving =
         (a.speed >= R.idleSpeed || a.angSpeed >= R.idleAngSpeed) && (b.speed >= R.idleSpeed || b.angSpeed >= R.idleAngSpeed);
       if (f.inContact) cnt.semCombate = 0;
@@ -356,21 +363,31 @@ export class Referee {
     }
   }
 
+  /**
+   * Art. 13: quem tinha a iniciativa do ataque (empurrando nos últimos instantes) e conduziu
+   * um rival passivo para fora fica com o ponto, mesmo saindo junto ou antes.
+   * Retorna null se ninguém (ou os dois) tinha a iniciativa.
+   */
+  private initiativeWinner(at = this.t): number | null {
+    const W = this.rules.initiativeWindow;
+    const has = [at - this.lastPush[0] <= W, at - this.lastPush[1] <= W];
+    if (has[0] && !has[1]) return 0;
+    if (has[1] && !has[0]) return 1;
+    return null;
+  }
+
   private resolveOut() {
     const R = this.rules;
     const first = this.firstOut!;
     const other = 1 - first.who;
     if (this.secondOutT !== null) {
-      const gap = this.secondOutT - first.t;
-      if (gap <= R.simultaneousWindow) {
-        this.torinaoshi('os dois robôs tocaram fora ao mesmo tempo');
+      const w = this.initiativeWinner(first.t);
+      if (w !== null) {
+        this.award([w], w === first.who ? 'iniciativa' : 'yuko');
         return;
       }
-      // Art. 13: quem tinha a iniciativa e conduziu o rival para fora fica com o ponto
-      const hadInitiative = first.t - this.lastPush[first.who] <= R.initiativeWindow;
-      const victimPassive = first.t - this.lastPush[other] > R.initiativeWindow;
-      if (hadInitiative && victimPassive) {
-        this.award([first.who], 'iniciativa');
+      if (this.secondOutT - first.t <= R.simultaneousWindow) {
+        this.torinaoshi('os dois robôs tocaram fora ao mesmo tempo');
         return;
       }
     }

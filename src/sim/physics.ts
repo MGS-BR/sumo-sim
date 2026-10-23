@@ -168,7 +168,7 @@ export class SumoWorld {
       wheels: geom.wheels.map(() => ({
         prevCompression: 0,
         spin: 0,
-        state: { load: 0, traction: 0, lateral: 0, slipping: false, spin: 0, contact: null, onOutsideFloor: false, overEdge: false },
+        state: { load: 0, traction: 0, lateral: 0, slipping: false, spin: 0, omega: 0, contact: null, onOutsideFloor: false, overEdge: false },
       })),
     };
   }
@@ -281,6 +281,7 @@ export class SumoWorld {
         st.overEdge = this.hubOverEdge(pos, rot, wg);
         wr.spin += u * r.freeOmega * dt;
         st.spin = wr.spin;
+        st.omega = u * r.freeOmega;
         return;
       }
       wr.prevCompression = h.compression;
@@ -319,6 +320,7 @@ export class SumoWorld {
       body.applyImpulseAtPoint(scale(f, dt), h.point, true);
 
       wr.spin += out.omega * dt;
+      st.omega = out.omega;
       st.load = load;
       st.traction = out.fLong;
       st.lateral = out.fLat;
@@ -336,19 +338,27 @@ export class SumoWorld {
     return Math.hypot(p.x, p.z) > ARENA.dohyoRadius;
   }
 
-  private touching(a: Collider, b: Collider): boolean {
-    let hit = false;
+  /** Ponto (mundo) onde dois colisores se tocam, ou null */
+  private touchPoint(a: Collider, b: Collider): Vec3 | null {
+    let pt: Vec3 | null = null;
     this.world.contactPair(a, b, (manifold) => {
-      if (hit) return;
+      if (pt) return;
       const n = manifold.numContacts();
       for (let i = 0; i < n; i++) {
-        if (manifold.contactDist(i) <= PHYS.touchEps) {
-          hit = true;
-          return;
+        if (manifold.contactDist(i) > PHYS.touchEps) continue;
+        // ponto do solver (mundo); se não houver, usa o ponto local do colisor 1 transformado
+        const sp = manifold.numSolverContacts() > 0 ? manifold.solverContactPoint(0) : null;
+        if (sp) pt = { x: sp.x, y: sp.y, z: sp.z };
+        else {
+          const lp = manifold.localContactPoint1(i);
+          const t = a.translation();
+          const q = a.rotation();
+          pt = lp ? add({ x: t.x, y: t.y, z: t.z }, rotate(q, { x: lp.x, y: lp.y, z: lp.z })) : { x: t.x, y: 0, z: t.z };
         }
+        return;
       }
     });
-    return hit;
+    return pt;
   }
 
   robotState(i: number): RobotState {
@@ -358,20 +368,19 @@ export class SumoWorld {
     const q = b.rotation();
     const lv = b.linvel();
     const av = b.angvel();
-    let touchingOutside = false;
+    // Basta QUALQUER parte do robô encostar no chão de fora (Art. 13): chassi, lâmina, roda
+    let outsidePoint: Vec3 | null = null;
     for (const col of r.colliders) {
-      if (this.touching(col, this.ground)) {
-        touchingOutside = true;
-        break;
-      }
+      outsidePoint = this.touchPoint(col, this.ground);
+      if (outsidePoint) break;
     }
     let loadSum = 0;
     for (const w of r.wheels) {
       loadSum += w.state.load;
-      // roda apoiada no chão de fora do dohyo também conta como "tocar fora"
-      if (w.state.contact && w.state.onOutsideFloor) touchingOutside = true;
+      if (!outsidePoint && w.state.contact && w.state.onOutsideFloor) outsidePoint = { ...w.state.contact };
     }
     const fallen = t.y < -0.1;
+    if (!outsidePoint && fallen) outsidePoint = { x: t.x, y: 0, z: t.z };
     return {
       position: { x: t.x, y: t.y, z: t.z },
       rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
@@ -380,23 +389,36 @@ export class SumoWorld {
       yaw: yawOf(q),
       wheels: r.wheels.map((w) => ({ ...w.state, contact: w.state.contact ? { ...w.state.contact } : null })),
       wheelLoadRatio: loadSum / (r.spec.mass * GRAVITY),
-      touchingOutside: touchingOutside || fallen,
+      touchingOutside: outsidePoint !== null,
+      outsidePoint,
       fallen,
+      drive: { left: r.command.left, right: r.command.right },
     };
   }
 
-  robotsInContact(): boolean {
+  /** Ponto de contato entre os dois robôs, ou null */
+  robotsContactPoint(): Vec3 | null {
     const [a, b] = this.robots;
-    for (const ca of a.colliders) for (const cb of b.colliders) if (this.touching(ca, cb)) return true;
-    return false;
+    for (const ca of a.colliders)
+      for (const cb of b.colliders) {
+        const p = this.touchPoint(ca, cb);
+        if (p) return p;
+      }
+    return null;
+  }
+
+  robotsInContact(): boolean {
+    return this.robotsContactPoint() !== null;
   }
 
   snapshot(): SimSnapshot {
+    const cp = this.robotsContactPoint();
     return {
       tick: this.tick,
       time: this.tick * PHYSICS_DT,
       robots: [this.robotState(0), this.robotState(1)],
-      inContact: this.robotsInContact(),
+      inContact: cp !== null,
+      contactPoint: cp,
     };
   }
 

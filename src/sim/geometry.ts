@@ -27,6 +27,7 @@ export interface RobotGeometry {
   /** Altura da face frontal no topo (para decalques) */
   topFrontX: number;
   bodyHalfWidth: number;
+  bladeHalfWidth: number;
   bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
   /** Problemas geométricos (não de regulamento) */
   issues: string[];
@@ -53,7 +54,8 @@ export function buildRobotGeometry(spec: RobotSpec): RobotGeometry {
   const ww = spec.wheels.width;
 
   const bladeAngle = deg(Math.min(80, Math.max(8, spec.blade.angleDeg)));
-  const bladeTop = Math.max(c + spec.blade.height, gc + 0.002);
+  const bladeTop = Math.max(c + spec.blade.length * Math.sin(bladeAngle), gc + 0.002);
+  const bladeW = Math.max(0.01, spec.blade.width);
   const bladeH = bladeTop - c;
   const xFront = L / 2;
   const xBladeBack = xFront - bladeH / Math.tan(bladeAngle);
@@ -64,7 +66,7 @@ export function buildRobotGeometry(spec: RobotSpec): RobotGeometry {
     [xBladeBack, bladeTop],
     [xBladeBack, c],
   ];
-  const bladeHull = extrude(bladeProfile, W / 2);
+  const bladeHull = extrude(bladeProfile, bladeW / 2);
 
   // Chassi: começa atrás da lâmina e sobe pela face frontal até o topo
   const frontAngle = deg(Math.min(90, Math.max(10, spec.frontAngleDeg)));
@@ -80,6 +82,7 @@ export function buildRobotGeometry(spec: RobotSpec): RobotGeometry {
     );
   }
   if (xBladeBack - xRear < 0.03) issues.push('Lâmina longa demais: sobra pouco chassi atrás dela');
+  if (bladeW < 0.03) issues.push('Lâmina estreita demais (mínimo 30 mm)');
 
   const bodyHalfWidth = W / 2 - (ww + 0.001);
   if (bodyHalfWidth < 0.015) issues.push('Rodas largas demais para a largura do robô');
@@ -117,7 +120,9 @@ export function buildRobotGeometry(spec: RobotSpec): RobotGeometry {
     bladeBackX: xBladeBack,
     topFrontX: xTop,
     bodyHalfWidth,
-    bounds: { minX: xRear, maxX: xFront, minY: 0, maxY, minZ: -W / 2, maxZ: W / 2 },
+    bladeHalfWidth: bladeW / 2,
+    // a largura que conta na caixa é a maior entre robô (com rodas) e lâmina
+    bounds: { minX: xRear, maxX: xFront, minY: 0, maxY, minZ: -Math.max(W, bladeW) / 2, maxZ: Math.max(W, bladeW) / 2 },
     issues,
   };
 }

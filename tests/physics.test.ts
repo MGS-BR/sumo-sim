@@ -116,6 +116,30 @@ describe('física do robô', () => {
     w.dispose();
   });
 
+  it('basta UMA PARTE encostar fora: o toque é detectado com o robô ainda quase todo no dohyo', () => {
+    for (const id of ['bloco', 'kunai', 'trator']) {
+      const w = new SumoWorld(R, [clonePreset(id), clonePreset('bloco')]);
+      w.setPose(0, { x: 0.25, z: 0, yaw: 0 });
+      far(w, 1);
+      steps(w, 0.2);
+      w.setCommand(0, { left: 0.35, right: 0.35 }); // devagar: tomba pela borda
+      let first: ReturnType<SumoWorld['robotState']> | null = null;
+      for (let i = 0; i < PHYSICS_HZ * 3 && !first; i++) {
+        w.step();
+        const s = w.robotState(0);
+        if (s.touchingOutside) first = s;
+      }
+      expect(first, id).not.toBeNull();
+      const p = first!.outsidePoint!;
+      expect(p.y).toBeLessThan(0.003); // tocou o chão de fora, não a lateral do dohyo
+      expect(Math.hypot(p.x, p.z)).toBeGreaterThan(ARENA.dohyoRadius);
+      // o centro do robô ainda está a menos de meio robô da borda: só a ponta saiu
+      expect(Math.hypot(first!.position.x, first!.position.z)).toBeLessThan(ARENA.dohyoRadius + 0.05);
+      expect(first!.position.y).toBeGreaterThan(0.012); // ainda não caiu
+      w.dispose();
+    }
+  });
+
   it('a rampa funciona: a lâmina mais baixa tira peso das rodas do rival', () => {
     // Trator (aresta a 0,2 mm, 20°) contra Bloco (aresta a 0,5 mm)
     const w = new SumoWorld(R, [clonePreset('trator'), clonePreset('bloco')]);

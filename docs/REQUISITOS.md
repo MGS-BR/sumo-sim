@@ -28,9 +28,10 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF06 | Juiz automático: rounds, Yuko, Shinitai, Torinaoshi, Hansoku, Keikoku, Yusei, prorrogação | ✅ |
 | RF07 | HUD: placar de Yuko, Keikoku, round, relógio, contagem do juiz (1-2-3), mensagens | ✅ |
 | RF08 | Presets prontos (Kunai, Bloco, Trator) | ✅ |
-| RF09 | Editor de robô: dimensões, lâmina, rodas, motor, massa e CG; inspeção ao vivo; salvo no navegador | ✅ |
+| RF09 | Editor de robô: dimensões, lâmina (ângulo, comprimento, largura, altura ligada, aresta), rodas, motor, massa e CG; inspeção ao vivo; câmera controlada pelo mouse com vistas prontas; salvo no navegador | ✅ |
 | RF10 | Câmeras: transmissão, de cima, rente ao dohyo, livre (mouse) | ✅ |
-| RF11 | Replay em câmera lenta do lance do Yuko | ✅ |
+| RF11 | Replay em câmera lenta do lance do Yuko. Quando o ponto é por tocar fora, o replay congela no instante do toque, aproxima a câmera rente ao chão e marca o ponto | ✅ |
+| RF17 | Sons: motor de cada robô (tom pela rotação, volume pela corrente), raspagem no contato, batida proporcional ao impacto, chiado de pneu patinando; volume ajustável | ✅ |
 | RF12 | Modo debug: carga e tração por roda, patinação, CG, % do peso nas rodas | ✅ |
 | RF13 | Bot de treino (fácil/médio/difícil) | ✅ |
 | RF14 | Bot autônomo programável com sensores simulados (oponente, linha) | 🔜 |
@@ -75,12 +76,13 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | Art. 8: com 1 Yuko no fim, vence quem tem | ✅ |
 | Art. 8 / 15: sem vencedor → Yusei; sem decisão → prorrogação de 3 min, morte súbita | ✅ Yusei por métrica de domínio (tempo empurrando + posição central). Diferença < 15% → prorrogação |
 | Art. 10: posicionamento atrás da shikiri-sen, tocando a faixa | ✅ Basta uma parte do robô na faixa. O robô pode ficar sobre a linha marrom, sem passar da borda dela voltada ao centro. Pedidos fora da regra são corrigidos para a pose válida mais próxima (o robô recua ao girar encostado na linha) |
-| Art. 12: Torinaoshi (saída simultânea, travados por 3 s) | ✅ Janela de simultaneidade de 50 ms |
+| Art. 12: Torinaoshi (saída simultânea, travados por 3 s) | ✅ Janela de simultaneidade de 50 ms. Só vale quando nenhum dos dois (ou ambos) tinha a iniciativa |
 | Art. 13: Yuko quando o rival toca fora | ✅ |
-| Art. 13 (3º item): atacante que conduz o rival para fora vence mesmo saindo antes | ✅ Exige que tenha empurrado nos últimos 0,5 s e que o rival não estivesse empurrando |
+| Art. 13 (3º item): atacante que conduz o rival para fora vence mesmo saindo antes | ✅ Exige que tenha empurrado nos últimos 0,5 s e que o rival não estivesse empurrando. Vale também para saídas simultâneas |
+| Art. 13: qualquer parte tocando fora já é Yuko | ✅ Chassi, lâmina ou roda tocando o chão de fora. O replay congela no instante do toque e aproxima a câmera do ponto |
 | Art. 14: Shinitai (roda além da borda por 3 s) | ✅ |
 | Art. 16: Keikoku (mexer antes do início; atraso > 30 s); 2 Keikoku = Yuko | ✅ No Realista os motores ficam ligados na contagem: queimar a largada dá Keikoku |
-| Art. 17: robô parado por 3 s → Hansoku | ✅ |
+| Art. 17: robô parado por 3 s → Hansoku | ✅ Motor desligado conta como parado mesmo encostado no rival (prevalece sobre o Art. 12) |
 | Art. 17: ambos se movendo sem contato por 3 s → Hansoku para os dois | ✅ Configurável. A contagem pausa enquanto os robôs se aproximam |
 | Art. 22–23: lado direito do juiz vermelho; adesivo de cor | ✅ |
 
@@ -149,6 +151,8 @@ tests/            vitest (física, juiz, partidas bot × bot, determinismo)
 - Torneio/chaveamento.
 - Exportar/importar robôs (JSON).
 - Mega Sumô e Sumô LEGO reaproveitando a mesma base (dimensões e limites já isolados).
+
+Análise detalhada de comprimento, largura e ângulo da lâmina: [ANALISE-LAMINA.md](ANALISE-LAMINA.md).
 
 ## 9. Limitações conhecidas
 - O modelo de pneu é simplificado: sem inércia própria da roda e sem curva de atrito por escorregamento.

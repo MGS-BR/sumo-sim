@@ -26,8 +26,11 @@ export interface RobotSpec {
   blade: {
     /** Ângulo da lâmina em relação ao chão (graus) */
     angleDeg: number;
-    /** Altura vertical da lâmina */
-    height: number;
+    /** Comprimento da lâmina medido ao longo da rampa (da aresta até o topo).
+     *  Altura = comprimento · sen(ângulo); profundidade = comprimento · cos(ângulo) */
+    length: number;
+    /** Largura da lâmina (pode ser menor que o robô; a maior das duas conta na caixa de inspeção) */
+    width: number;
     /** Folga da aresta da lâmina em relação ao chão (0 = arrastando) */
     edgeClearance: number;
     /** Atrito da lâmina (aço polido ~0,2) */
@@ -120,6 +123,8 @@ export interface WheelState {
   slipping: boolean;
   /** Ângulo acumulado de rotação (visual) */
   spin: number;
+  /** Velocidade angular da roda (rad/s) — som do motor */
+  omega: number;
   /** Ponto de contato (mundo) quando há contato */
   contact: Vec3 | null;
   /** Roda apoiada no chão de fora do dohyo */
@@ -139,6 +144,10 @@ export interface RobotState {
   wheelLoadRatio: number;
   /** Algum ponto do robô toca fora do dohyo (chão do yochi) */
   touchingOutside: boolean;
+  /** Onde tocou fora (para o replay de evidência) */
+  outsidePoint: Vec3 | null;
+  /** Comando aplicado aos motores neste tick */
+  drive: DriveCommand;
   /** Caiu abaixo do plano do chão (segurança) */
   fallen: boolean;
 }
@@ -149,6 +158,7 @@ export interface SimSnapshot {
   robots: [RobotState, RobotState];
   /** Robôs em contato físico neste tick */
   inContact: boolean;
+  contactPoint: Vec3 | null;
 }
 
 export type PlayerIndex = 0 | 1;

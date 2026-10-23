@@ -9,7 +9,8 @@ Requer Node 20+.
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # 45 testes: física, juiz, partidas bot × bot, determinismo
+npm test             # 58 testes: física, juiz, partidas bot × bot, determinismo
+npm run analise      # duelos de comprimento/largura/ângulo da lâmina (docs/ANALISE-LAMINA.md)
 npm run build        # dist/ para hospedar
 npm run build:single # dist-single/index.html — um arquivo só, abre direto no navegador
 ```
@@ -36,5 +37,8 @@ No posicionamento também dá para **arrastar o robô com o mouse** (roda gira, 
   - **Arcade**: a mesma física a 50% da velocidade.
 - **Robôs:** três presets e um editor. O editor valida a caixa de inspeção (100 mm, 500 g) e mostra velocidade, peso nas rodas e tração.
 - **Física:** a tração de cada roda é limitada por μ·N. Quando a lâmina do rival entra por baixo, N cai e o robô perde força. Ligue o debug (F2) para ver.
+
+- **Som:** motores, atrito e batidas sintetizados no navegador; volume no menu.
+- **Evidência:** quando um robô encosta fora, o replay congela no toque e aproxima a câmera do ponto.
 
 Detalhes, decisões e interpretações do regulamento: [docs/REQUISITOS.md](docs/REQUISITOS.md).

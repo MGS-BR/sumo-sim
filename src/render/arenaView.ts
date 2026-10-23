@@ -233,7 +233,7 @@ export class ArenaView {
 
   /** Suspende a câmera livre enquanto o robô é arrastado */
   suspendControls(on: boolean) {
-    this.controls.enabled = !on && this.cameraMode === 'livre';
+    this.controls.enabled = !on && (this.cameraMode === 'livre' || this.inspecting);
   }
 
   get canvas() {
@@ -357,6 +357,7 @@ export class ArenaView {
   }
 
   setCamera(mode: CameraMode) {
+    this.setInspectCamera(false);
     this.cameraMode = mode;
     this.controls.enabled = mode === 'livre';
     if (mode === 'livre') this.controls.target.copy(this.camTarget);
@@ -365,11 +366,109 @@ export class ArenaView {
   /** Órbita lenta (menus) */
   setOrbit(on: boolean, radius = 0.7, height = 0.35, speed = 0.12) {
     this.orbit = { ...this.orbit, on, radius, height, speed };
+    this.setInspectCamera(false);
+  }
+
+  // ------------------------------------------------ câmera do editor (controlada pelo usuário)
+  private inspecting = false;
+  setInspectCamera(on: boolean) {
+    if (on === this.inspecting) return;
+    this.inspecting = on;
+    const c = this.controls;
+    if (on) {
+      this.orbit.on = false;
+      c.target.set(0, ARENA.dohyoHeight + 0.02, 0);
+      c.minDistance = 0.07;
+      c.maxDistance = 0.9;
+      c.enablePan = true;
+      c.autoRotate = false;
+      c.autoRotateSpeed = 2.5;
+      this.inspectView('perspectiva');
+      c.enabled = true;
+    } else {
+      c.autoRotate = false;
+      c.minDistance = 0.12;
+      c.maxDistance = 3;
+      c.enabled = this.cameraMode === 'livre';
+    }
+  }
+  setAutoRotate(on: boolean) {
+    this.controls.autoRotate = on;
+  }
+  get autoRotate() {
+    return this.controls.autoRotate;
+  }
+  /** Vistas prontas do editor */
+  inspectView(v: 'perspectiva' | 'frente' | 'lado' | 'cima') {
+    const H = ARENA.dohyoHeight + 0.02;
+    const k = this.camera.aspect < 1 ? 1.9 : 1; // retrato (celular): afasta para caber
+    const raw = { perspectiva: [0.2, 0.13, 0.22], frente: [0.3, H + 0.005, 0], lado: [0, H + 0.005, 0.3], cima: [0, 0.32, 0.0001] }[v];
+    const pos = v === 'frente' || v === 'lado' ? [raw[0] * k, raw[1], raw[2] * k] : raw.map((c) => c * k);
+    this.controls.target.set(0, H, 0);
+    this.camera.position.set(pos[0], pos[1], pos[2]);
+    this.camera.lookAt(this.controls.target);
+    this.controls.update();
+  }
+
+  // ------------------------------------------------ evidência (zoom no toque fora)
+  private evidence: THREE.Group | null = null;
+  private evidenceT = 0;
+  private camOverride: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
+
+  /** Marca no chão onde o robô tocou fora; null remove */
+  setEvidence(p: { x: number; y: number; z: number } | null) {
+    if (!p) {
+      if (this.evidence) this.evidence.visible = false;
+      return;
+    }
+    if (!this.evidence) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({ color: '#f2c14e', transparent: true, opacity: 0.95, depthTest: false });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.009, 0.0125, 40), mat);
+      ring.rotation.x = -Math.PI / 2;
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.003, 20), mat);
+      dot.rotation.x = -Math.PI / 2;
+      const outer = new THREE.Mesh(new THREE.RingGeometry(0.018, 0.02, 48), mat.clone());
+      outer.rotation.x = -Math.PI / 2;
+      outer.name = 'pulse';
+      g.add(ring, dot, outer);
+      g.renderOrder = 20;
+      g.traverse((o) => (o.renderOrder = 20));
+      this.scene.add(g);
+      this.evidence = g;
+    }
+    this.evidence.position.set(p.x, Math.max(0.0008, p.y + 0.0008), p.z);
+    this.evidence.visible = true;
+  }
+
+  /** Câmera fixa num ponto (replay de evidência); null volta ao normal */
+  setCameraOverride(o: { pos: { x: number; y: number; z: number }; look: { x: number; y: number; z: number } } | null) {
+    this.camOverride = o ? { pos: new THREE.Vector3(o.pos.x, o.pos.y, o.pos.z), look: new THREE.Vector3(o.look.x, o.look.y, o.look.z) } : null;
   }
 
   /** Atualiza a câmera; `focus` = ponto de interesse (centro dos robôs) */
   updateCamera(dt: number, focus?: { x: number; z: number }) {
     const H = ARENA.dohyoHeight;
+    if (this.evidence?.visible) {
+      this.evidenceT += dt;
+      const pulse = this.evidence.getObjectByName('pulse') as THREE.Mesh | undefined;
+      if (pulse) {
+        const k = (this.evidenceT * 1.4) % 1;
+        pulse.scale.setScalar(1 + k * 1.8);
+        (pulse.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
+      }
+    }
+    if (this.inspecting) {
+      this.controls.update();
+      return;
+    }
+    if (this.camOverride) {
+      const k = 1 - Math.exp(-dt * 4);
+      this.camera.position.lerp(this.camOverride.pos, k);
+      this.camTarget.lerp(this.camOverride.look, k);
+      this.camera.lookAt(this.camTarget);
+      return;
+    }
     if (this.orbit.on) {
       this.orbit.angle += dt * this.orbit.speed;
       this.camGoal.set(Math.sin(this.orbit.angle) * this.orbit.radius, this.orbit.height, Math.cos(this.orbit.angle) * this.orbit.radius);
@@ -407,8 +506,10 @@ export class ArenaView {
 
   /** Desloca o centro da imagem (fração da largura), p.ex. para abrir espaço para um painel */
   private frameOffset = 0;
-  setFrameOffset(f: number) {
+  private frameOffsetY = 0;
+  setFrameOffset(f: number, fy = 0) {
     this.frameOffset = f;
+    this.frameOffsetY = fy;
     this.resize();
   }
 
@@ -421,7 +522,7 @@ export class ArenaView {
     const h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    if (this.frameOffset) this.camera.setViewOffset(w, h, w * this.frameOffset, 0, w, h);
+    if (this.frameOffset || this.frameOffsetY) this.camera.setViewOffset(w, h, w * this.frameOffset, h * this.frameOffsetY, w, h);
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
   }

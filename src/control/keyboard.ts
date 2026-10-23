@@ -82,6 +82,10 @@ export class KeyboardState {
     }
     return had;
   }
+  /** Alguma tecla foi APERTADA desde o último clearPressed (segurar não conta) */
+  anyPressed(): boolean {
+    return this.pressed.size > 0;
+  }
   clearPressed() {
     this.pressed.clear();
   }

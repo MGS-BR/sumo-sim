@@ -2,6 +2,7 @@ import { buildRobotGeometry, staticWheelLoadFraction } from './geometry';
 import { theoreticalTopSpeed } from './drive';
 import { GRAVITY } from './arena';
 import type { RobotSpec } from './types';
+import { bladeDepth, bladeHeight } from './presets';
 
 /**
  * "Caixa de inspeção" do Mini Sumô (500g) — Regulamento RoboCore Art. 4:
@@ -26,6 +27,8 @@ export interface InspectionResult {
   ok: boolean;
   checks: InspectionCheck[];
   derived: {
+    bladeHeight: number;
+    bladeDepth: number;
     topSpeed: number; // m/s
     wheelLoadFraction: number;
     maxTraction: number; // N (μ·N nas rodas)
@@ -46,7 +49,12 @@ export function inspect(spec: RobotSpec): InspectionResult {
 
   const checks: InspectionCheck[] = [
     { id: 'length', label: 'Comprimento ≤ 100 mm', ok: lengthOk, detail: mm(spec.length) },
-    { id: 'width', label: 'Largura ≤ 100 mm', ok: widthOk, detail: mm(spec.width) },
+    {
+      id: 'width',
+      label: 'Largura ≤ 100 mm',
+      ok: widthOk,
+      detail: `${mm(geom.bounds.maxZ - geom.bounds.minZ)}${spec.blade.width > spec.width ? ' (lâmina)' : ''}`,
+    },
     { id: 'mass', label: 'Massa ≤ 500 g', ok: massOk, detail: `${(spec.mass * 1000).toFixed(0)} g` },
     { id: 'com', label: 'Centro de massa dentro do robô', ok: comInside, detail: `x ${mm(spec.comX)}, y ${mm(spec.comY)}` },
     {
@@ -65,6 +73,8 @@ export function inspect(spec: RobotSpec): InspectionResult {
     ok: checks.every((c) => c.ok),
     checks,
     derived: {
+      bladeHeight: bladeHeight(spec),
+      bladeDepth: bladeDepth(spec),
       topSpeed: theoreticalTopSpeed(spec.motor.freeRpm, spec.wheels.radius),
       wheelLoadFraction: frac,
       maxTraction,
@@ -95,12 +105,14 @@ const mm2m = (v: number) => v / 1000;
 
 export const PARAMS: ParamDef[] = [
   { key: 'length', group: 'Dimensões', label: 'Comprimento', unit: 'mm', min: 60, max: 110, step: 0.5, toUi: (s) => m2mm(s.length), apply: (s, v) => (s.length = mm2m(v)), hint: 'Limite 100 mm' },
-  { key: 'width', group: 'Dimensões', label: 'Largura', unit: 'mm', min: 60, max: 110, step: 0.5, toUi: (s) => m2mm(s.width), apply: (s, v) => (s.width = mm2m(v)), hint: 'Limite 100 mm (inclui rodas)' },
+  { key: 'width', group: 'Dimensões', label: 'Largura do robô', unit: 'mm', min: 60, max: 110, step: 0.5, toUi: (s) => m2mm(s.width), apply: (s, v) => (s.width = mm2m(v)), hint: 'Limite 100 mm (inclui rodas)' },
   { key: 'height', group: 'Dimensões', label: 'Altura', unit: 'mm', min: 25, max: 100, step: 1, toUi: (s) => m2mm(s.height), apply: (s, v) => (s.height = mm2m(v)) },
   { key: 'frontAngle', group: 'Dimensões', label: 'Ângulo da frente', unit: '°', min: 15, max: 90, step: 1, toUi: (s) => s.frontAngleDeg, apply: (s, v) => (s.frontAngleDeg = v), hint: 'Baixo = cunha, 90 = caixa' },
   { key: 'gc', group: 'Dimensões', label: 'Folga do chassi', unit: 'mm', min: 1, max: 10, step: 0.5, toUi: (s) => m2mm(s.groundClearance), apply: (s, v) => (s.groundClearance = mm2m(v)) },
   { key: 'bladeAngle', group: 'Lâmina', label: 'Ângulo da lâmina', unit: '°', min: 10, max: 60, step: 1, toUi: (s) => s.blade.angleDeg, apply: (s, v) => (s.blade.angleDeg = v), hint: 'Menor = entra mais fácil por baixo, levanta menos' },
-  { key: 'bladeH', group: 'Lâmina', label: 'Altura da lâmina', unit: 'mm', min: 4, max: 30, step: 0.5, toUi: (s) => m2mm(s.blade.height), apply: (s, v) => (s.blade.height = mm2m(v)) },
+  { key: 'bladeLen', group: 'Lâmina', label: 'Comprimento da lâmina', unit: 'mm', min: 6, max: 60, step: 0.5, toUi: (s) => m2mm(s.blade.length), apply: (s, v) => (s.blade.length = mm2m(v)), hint: 'Ao longo da rampa. Mais longa = levanta mais, mas rouba chassi' },
+  { key: 'bladeH', group: 'Lâmina', label: 'Altura da lâmina', unit: 'mm', min: 2, max: 40, step: 0.5, toUi: (s) => m2mm(bladeHeight(s)), apply: (s, v) => (s.blade.length = mm2m(v) / Math.sin((s.blade.angleDeg * Math.PI) / 180)), hint: 'Ligada ao comprimento: altura = comprimento × sen(ângulo)' },
+  { key: 'bladeW', group: 'Lâmina', label: 'Largura da lâmina', unit: 'mm', min: 30, max: 110, step: 0.5, toUi: (s) => m2mm(s.blade.width), apply: (s, v) => (s.blade.width = mm2m(v)), hint: 'Mais estreita deixa as quinas e rodas expostas' },
   { key: 'bladeGap', group: 'Lâmina', label: 'Folga da aresta', unit: 'mm', min: 0, max: 3, step: 0.05, toUi: (s) => m2mm(s.blade.edgeClearance), apply: (s, v) => (s.blade.edgeClearance = mm2m(v)), hint: 'Quem tem a aresta mais baixa entra por baixo' },
   { key: 'bladeMu', group: 'Lâmina', label: 'Atrito da lâmina', unit: 'μ', min: 0.05, max: 0.8, step: 0.01, toUi: (s) => s.blade.friction, apply: (s, v) => (s.blade.friction = v) },
   { key: 'wheelCount', group: 'Rodas', label: 'Nº de rodas', unit: '', min: 2, max: 4, step: 2, toUi: (s) => s.wheels.count, apply: (s, v) => (s.wheels.count = v >= 3 ? 4 : 2) },

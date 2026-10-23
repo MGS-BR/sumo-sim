@@ -1,5 +1,6 @@
 import type { RobotSpec } from '../sim/types';
 import { PRESETS } from '../sim/presets';
+import { normalizeSpec } from '../sim/specs';
 
 const KEY = 'sumo500.robots.v1';
 const SETTINGS = 'sumo500.settings.v1';
@@ -8,8 +9,19 @@ const SETTINGS = 'sumo500.settings.v1';
 export function loadCustomRobots(): RobotSpec[] {
   try {
     const raw = localStorage.getItem(KEY);
-    const list = raw ? (JSON.parse(raw) as RobotSpec[]) : [];
-    return Array.isArray(list) ? list.filter((r) => r && typeof r.length === 'number' && r.wheels && r.blade) : [];
+    const list: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return [];
+    // dados do navegador podem estar antigos ou editados à mão: normaliza tudo (limite de 50 robôs)
+    const out: RobotSpec[] = [];
+    const ids = new Set(PRESETS.map((p) => p.id));
+    for (const item of list.slice(0, 50)) {
+      const s = normalizeSpec(item);
+      if (s && !ids.has(s.id)) {
+        ids.add(s.id);
+        out.push(s);
+      }
+    }
+    return out;
   } catch {
     return [];
   }
@@ -17,7 +29,7 @@ export function loadCustomRobots(): RobotSpec[] {
 
 export function saveCustomRobots(list: RobotSpec[]) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(list));
+    localStorage.setItem(KEY, JSON.stringify(list.slice(0, 50)));
   } catch {
     /* modo privado / armazenamento bloqueado: só não persiste */
   }
@@ -34,7 +46,15 @@ export function isPreset(id: string) {
 export function loadSettings<T extends object>(defaults: T): T {
   try {
     const raw = localStorage.getItem(SETTINGS);
-    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== 'object') return { ...defaults };
+    // só aceita chaves conhecidas e com o mesmo tipo do padrão
+    const out = { ...defaults } as Record<string, unknown>;
+    for (const [k, v] of Object.entries(defaults)) {
+      const pv = (parsed as Record<string, unknown>)[k];
+      if (typeof pv === typeof v && (typeof pv !== 'number' || Number.isFinite(pv))) out[k] = pv;
+    }
+    return out as T;
   } catch {
     return defaults;
   }

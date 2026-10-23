@@ -19,6 +19,7 @@ interface Settings {
   replay: boolean;
   debug: boolean;
   muted: boolean;
+  volume: number;
   p1: string;
   p2: string;
 }
@@ -30,6 +31,7 @@ const DEFAULTS: Settings = {
   replay: true,
   debug: false,
   muted: false,
+  volume: 0.8,
   p1: 'trator',
   p2: 'kunai',
 };
@@ -65,7 +67,10 @@ export class App {
     this.hud = new Hud(root);
     this.ui = el('div', 'ui');
     root.appendChild(this.ui);
+    if (!Object.hasOwn(MODES, this.settings.mode)) this.settings.mode = DEFAULTS.mode;
+    if (!['p2', 'bot-facil', 'bot-medio', 'bot-dificil'].includes(this.settings.opponent)) this.settings.opponent = DEFAULTS.opponent;
     this.sfx.muted = this.settings.muted;
+    this.sfx.volume = this.settings.volume;
     if (!allRobots().some((r) => r.id === this.settings.p1)) this.settings.p1 = PRESETS[0].id;
     if (!allRobots().some((r) => r.id === this.settings.p2)) this.settings.p2 = PRESETS[1].id;
     window.addEventListener('keydown', (e) => this.onKey(e));
@@ -160,6 +165,7 @@ export class App {
           ${tog('replay', 'Replay do ponto', 'Câmera lenta a cada Yuko')}
           ${tog('debug', 'Ver forças (debug)', 'Carga e tração em cada roda · F2 na luta')}
           ${tog('muted', 'Sem som', '')}
+          <label class="vol"><span>Volume</span><input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-vol aria-label="Volume"></label>
         </div>
         <button class="primary big" data-act="next">Escolher robôs <kbd>Enter</kbd></button>
       </div>
@@ -195,6 +201,13 @@ export class App {
         this.save();
       }),
     );
+    const vol = scr.querySelector<HTMLInputElement>('[data-vol]')!;
+    vol.addEventListener('input', () => {
+      s.volume = +vol.value;
+      this.sfx.volume = s.volume;
+      this.save();
+    });
+    vol.addEventListener('change', () => this.sfx.impact(0.6));
     scr.querySelector('[data-act=next]')!.addEventListener('click', () => this.showSelect());
   }
 
@@ -264,7 +277,8 @@ export class App {
       ['Massa', `${fmt(spec.mass * 1000)} g`],
       ['Rodas', `${spec.wheels.count} × Ø${fmt(spec.wheels.radius * 2000)} mm · μ ${fmt(spec.wheels.friction, 2)}`],
       ['Motor', `${fmt(spec.motor.freeRpm)} RPM · ${fmt(spec.motor.stallTorque / 0.0980665, 1)} kgf·cm`],
-      ['Lâmina', `${fmt(spec.blade.angleDeg)}° · aresta a ${fmt(spec.blade.edgeClearance * 1000, 2)} mm`],
+      ['Lâmina', `${fmt(spec.blade.angleDeg)}° · ${fmt(spec.blade.length * 1000)} × ${fmt(spec.blade.width * 1000)} mm`],
+      ['Altura / aresta', `${fmt(d.bladeHeight * 1000, 1)} mm · folga ${fmt(spec.blade.edgeClearance * 1000, 2)} mm`],
       ['Velocidade máx.', `${fmt(d.topSpeed, 2)} m/s`],
       ['Peso nas rodas', `${fmt(d.wheelLoadFraction * 100)}%`],
       ['Tração máx.', `${fmt(d.maxTraction, 1)} N <small>(motores: ${fmt(d.motorForce)} N)</small>`],
@@ -276,10 +290,11 @@ export class App {
   // ---------------------------------------------------------------- editor
   private openEditor(spec: RobotSpec, forSlot: 0 | 1, isNew: boolean) {
     this.screen = 'editor';
-    this.view.setFrameOffset(window.innerWidth > 900 ? -0.06 : 0);
+    // desktop: robô entre os painéis; celular: robô na faixa de cima, acima dos painéis
+    this.view.setFrameOffset(window.innerWidth > 900 ? -0.06 : 0, window.innerWidth > 900 ? 0 : 0.29);
     this.view.setRobots([spec, null], [forSlot, null]);
-    this.view.setStaticPose(0, { x: 0, z: 0, yaw: 0.5 });
-    this.view.setOrbit(true, 0.3, 0.13, 0.25);
+    this.view.setStaticPose(0, { x: 0, z: 0, yaw: 0 });
+    this.view.setInspectCamera(true);
     this.view.setDebug(true);
     this.ui.innerHTML = '';
     const scr = el('section', 'screen editor');
@@ -304,6 +319,14 @@ export class App {
         <div class="ed-insp"></div>
         <div class="ed-derived"></div>
         <p class="ed-note">A física usa exatamente esta geometria. O ponto amarelo é o centro de massa.</p>
+        <div class="ed-cam" role="group" aria-label="Câmera">
+          <span class="lbl">Câmera</span>
+          <div class="ed-cam-row">
+            <button data-view="perspectiva">3D</button><button data-view="frente">Frente</button><button data-view="lado">Lado</button><button data-view="cima">Cima</button>
+            <button data-act="spin" aria-pressed="false">Auto-girar</button>
+          </div>
+          <small>Arraste para girar · roda/pinça = zoom · botão direito = mover</small>
+        </div>
         <div class="row">
           <button class="primary" data-act="save">Salvar</button>
           <button data-act="cancel">Cancelar</button>
@@ -313,7 +336,20 @@ export class App {
     this.ui.appendChild(scr);
 
     let rebuildTimer = 0;
+    const syncRows = () => {
+      // parâmetros ligados (comprimento ↔ altura da lâmina) precisam refletir o valor atual
+      scr.querySelectorAll<HTMLElement>('.prm').forEach((row) => {
+        const p = PARAMS.find((x) => x.key === row.dataset.key);
+        if (!p) return;
+        const v = String(+p.toUi(spec).toFixed(2));
+        const range = row.querySelector<HTMLInputElement>('input[type=range]')!;
+        const num = row.querySelector<HTMLInputElement>('input[type=number]')!;
+        if (range.value !== v) range.value = v;
+        if (num.value !== v && document.activeElement !== num) num.value = v;
+      });
+    };
     const refresh = () => {
+      syncRows();
       const r = inspect(spec);
       scr.querySelector('.ed-insp')!.innerHTML = r.checks
         .map((c) => `<div class="chk ${c.ok ? 'ok' : 'bad'}"><i>${c.ok ? '✓' : '✗'}</i><b>${c.label}</b><span>${esc(c.detail)}</span></div>`)
@@ -328,7 +364,7 @@ export class App {
       clearTimeout(rebuildTimer);
       rebuildTimer = window.setTimeout(() => {
         this.view.setRobots([spec, null], [forSlot, null]);
-        this.view.setStaticPose(0, { x: 0, z: 0, yaw: 0.5 });
+        this.view.setStaticPose(0, { x: 0, z: 0, yaw: 0 });
         this.view.setDebug(true);
       }, 60);
     };
@@ -348,12 +384,20 @@ export class App {
       const set = (v: number) => {
         if (!Number.isFinite(v)) return;
         p.apply(spec, Math.max(p.min, Math.min(p.max, v)));
-        range.value = String(p.toUi(spec));
-        num.value = String(p.toUi(spec));
+        num.value = String(+p.toUi(spec).toFixed(2));
         refresh();
       };
       range.addEventListener('input', () => set(+range.value));
       num.addEventListener('change', () => set(+num.value));
+    });
+    scr.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
+      b.addEventListener('click', () => this.view.inspectView(b.dataset.view as 'perspectiva' | 'frente' | 'lado' | 'cima')),
+    );
+    const spin = scr.querySelector<HTMLButtonElement>('[data-act=spin]')!;
+    spin.addEventListener('click', () => {
+      this.view.setAutoRotate(!this.view.autoRotate);
+      spin.setAttribute('aria-pressed', String(this.view.autoRotate));
+      spin.classList.toggle('on', this.view.autoRotate);
     });
     scr.querySelector('[data-act=cancel]')!.addEventListener('click', () => this.showSelect());
     scr.querySelector('[data-act=save]')!.addEventListener('click', () => {

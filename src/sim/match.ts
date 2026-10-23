@@ -19,7 +19,13 @@ export interface MatchOptions {
   rules?: Partial<RulesConfig>;
 }
 
-const REPLAY_SECONDS = 3;
+const REPLAY_SECONDS = 4;
+
+/** Primeiro toque fora do dohyo de cada robô no round atual (evidência para o replay) */
+export interface OutTouch {
+  t: number;
+  point: Vec3;
+}
 const REPLAY_EVERY = 2; // grava 1 a cada 2 ticks (240 Hz)
 
 const finite = (v: number) => (Number.isFinite(v) ? v : 0);
@@ -48,6 +54,7 @@ export class Match {
   private distanceRate = 0;
   lastSnapshot: SimSnapshot;
   replay: ReplayFrame[] = [];
+  outTouches: [OutTouch | null, OutTouch | null] = [null, null];
   tick = 0;
 
   static async create(opts: MatchOptions): Promise<Match> {
@@ -105,6 +112,12 @@ export class Match {
     const snap = this.sim.snapshot();
     this.lastSnapshot = snap;
     if (phase !== 'placement') this.recordReplay(snap);
+    if (phase === 'fight' || phase === 'deciding') {
+      for (const i of [0, 1]) {
+        const st = snap.robots[i];
+        if (!this.outTouches[i] && st.touchingOutside && st.outsidePoint) this.outTouches[i] = { t: snap.time, point: { ...st.outsidePoint } };
+      }
+    }
 
     const facts = this.buildFacts(snap, dt);
     const events = ref.update(facts);
@@ -121,6 +134,7 @@ export class Match {
       this.startPoses = [{ ...this.placements[0] }, { ...this.placements[1] }];
     } else if (e.phase === 'fight') {
       this.replay = [];
+      this.outTouches = [null, null];
     }
   }
 
@@ -158,6 +172,7 @@ export class Match {
         movedFromStart: Math.hypot(pose.x - start.x, pose.z - start.z),
         turnedFromStart: Math.abs(wrapAngle(pose.yaw - start.yaw)),
         pushing: false,
+        driveEffort: Math.max(Math.abs(st.drive.left), Math.abs(st.drive.right)),
         radius: Math.hypot(pose.x, pose.z),
         ready: this.ready[i],
       } satisfies RobotFact;
