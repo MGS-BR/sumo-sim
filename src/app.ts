@@ -1,0 +1,458 @@
+import { ArenaView } from './render/arenaView';
+import { TEAM_COLORS } from './render/robotMesh';
+import { Hud } from './ui/hud';
+import { Sfx } from './audio';
+import { KeyboardState } from './control/keyboard';
+import { Game, type Opponent } from './game';
+import { MODES, type GameMode } from './sim/modes';
+import { inspect, PARAMS, type ParamDef } from './sim/inspection';
+import { defaultPlacement } from './sim/placement';
+import { loadRapier } from './sim/physics';
+import type { RobotSpec } from './sim/types';
+import { allRobots, isPreset, loadCustomRobots, loadSettings, newRobotId, saveCustomRobots, saveSettings } from './ui/storage';
+import { PRESETS } from './sim/presets';
+
+interface Settings {
+  mode: GameMode;
+  opponent: Opponent;
+  noCombatRule: boolean;
+  replay: boolean;
+  debug: boolean;
+  muted: boolean;
+  p1: string;
+  p2: string;
+}
+
+const DEFAULTS: Settings = {
+  mode: 'arcade',
+  opponent: 'bot-medio',
+  noCombatRule: true,
+  replay: true,
+  debug: false,
+  muted: false,
+  p1: 'trator',
+  p2: 'kunai',
+};
+
+const TEAM = ['Vermelho', 'Azul'];
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = '') => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html) e.innerHTML = html;
+  return e;
+};
+const fmt = (v: number, d = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+type Screen = 'loading' | 'menu' | 'select' | 'editor' | 'game' | 'result';
+
+export class App {
+  private view: ArenaView;
+  private hud: Hud;
+  private sfx = new Sfx();
+  private keys = new KeyboardState();
+  private settings: Settings = loadSettings(DEFAULTS);
+  private screen: Screen = 'loading';
+  private ui: HTMLElement;
+  private game: Game | null = null;
+  private last = performance.now();
+  private pauseEl: HTMLElement | null = null;
+
+  constructor(root: HTMLElement) {
+    const stage = el('div', 'stage');
+    root.appendChild(stage);
+    this.view = new ArenaView(stage);
+    this.hud = new Hud(root);
+    this.ui = el('div', 'ui');
+    root.appendChild(this.ui);
+    this.sfx.muted = this.settings.muted;
+    if (!allRobots().some((r) => r.id === this.settings.p1)) this.settings.p1 = PRESETS[0].id;
+    if (!allRobots().some((r) => r.id === this.settings.p2)) this.settings.p2 = PRESETS[1].id;
+    window.addEventListener('keydown', (e) => this.onKey(e));
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  async boot() {
+    this.ui.innerHTML = '<div class="loading">Carregando física…</div>';
+    await loadRapier();
+    this.showMenu();
+  }
+
+  private save() {
+    saveSettings(this.settings);
+  }
+
+  private robot(id: string): RobotSpec {
+    return structuredClone(allRobots().find((r) => r.id === id) ?? PRESETS[0]);
+  }
+
+  private loop(t: number) {
+    const dt = Math.min(0.1, (t - this.last) / 1000);
+    this.last = t;
+    if (this.game && (this.screen === 'game' || this.screen === 'result')) this.game.frame(dt);
+    else this.view.updateCamera(dt);
+    this.view.render();
+    requestAnimationFrame((tt) => this.loop(tt));
+  }
+
+  private onKey(e: KeyboardEvent) {
+    const typing = (e.target as HTMLElement)?.tagName === 'INPUT';
+    if (typing) return;
+    if (this.screen === 'game' && e.code === 'Escape') this.togglePause();
+    else if (this.screen === 'result' && (e.code === 'Enter' || e.code === 'NumpadEnter')) this.startGame();
+    else if (this.screen === 'menu' && e.code === 'Enter') this.showSelect();
+    else if (this.screen === 'select' && e.code === 'Escape') this.showMenu();
+    else if (this.screen === 'select' && e.code === 'Enter') this.startGame();
+    else if (this.screen === 'editor' && e.code === 'Escape') this.showSelect();
+  }
+
+  // ---------------------------------------------------------------- vitrine 3D
+  private showcase(specs: [RobotSpec | null, RobotSpec | null], orbit: [number, number, number] = [0.62, 0.3, 0.1], offset = 0) {
+    this.view.setFrameOffset(window.innerWidth > 900 ? offset : 0);
+    this.view.setRobots(specs);
+    this.view.setDebug(false);
+    this.view.showPlacementZones(false);
+    for (const i of [0, 1]) if (specs[i]) this.view.setStaticPose(i, defaultPlacement(specs[i]!, i));
+    this.view.setOrbit(true, ...orbit);
+  }
+
+  private endGame() {
+    this.game?.dispose();
+    this.game = null;
+    this.hud.hide();
+    this.closePause();
+  }
+
+  // ---------------------------------------------------------------- menu
+  showMenu() {
+    this.endGame();
+    this.screen = 'menu';
+    this.showcase([this.robot(this.settings.p1), this.robot(this.settings.p2)], [0.66, 0.26, 0.1], 0.16);
+    const s = this.settings;
+    const seg = <T extends string>(name: keyof Settings, opts: [T, string][]) =>
+      `<div class="seg" data-name="${name}">${opts
+        .map(([v, l]) => `<button data-v="${v}" class="${s[name] === v ? 'on' : ''}">${l}</button>`)
+        .join('')}</div>`;
+    const tog = (name: keyof Settings, label: string, hint: string) =>
+      `<label class="tog"><input type="checkbox" data-name="${name}" ${s[name] ? 'checked' : ''}><span></span><div><b>${label}</b><small>${hint}</small></div></label>`;
+
+    this.ui.innerHTML = '';
+    const scr = el('section', 'screen menu');
+    scr.innerHTML = `
+      <header class="brand">
+        <div class="mark">相撲</div>
+        <h1>Sumô <em>500g</em></h1>
+        <p>Simulador de Mini Sumô em escala real · regulamento RoboCore v3.1</p>
+      </header>
+      <div class="panel">
+        <div class="field"><span class="lbl">Modo</span>${seg('mode', [
+          ['realista', 'Realista'],
+          ['arcade', 'Arcade'],
+        ])}<p class="desc" data-desc="mode"></p></div>
+        <div class="field"><span class="lbl">Oponente</span>${seg('opponent', [
+          ['p2', '2 jogadores'],
+          ['bot-facil', 'Bot fácil'],
+          ['bot-medio', 'Bot médio'],
+          ['bot-dificil', 'Bot difícil'],
+        ])}</div>
+        <div class="field"><span class="lbl">Opções</span>
+          ${tog('noCombatRule', 'Hansoku por falta de combate', 'Art. 17: os dois se movendo sem contato por 3 s')}
+          ${tog('replay', 'Replay do ponto', 'Câmera lenta a cada Yuko')}
+          ${tog('debug', 'Ver forças (debug)', 'Carga e tração em cada roda · F2 na luta')}
+          ${tog('muted', 'Sem som', '')}
+        </div>
+        <button class="primary big" data-act="next">Escolher robôs <kbd>Enter</kbd></button>
+      </div>
+      <footer class="keys">
+        <div><b class="t0">Vermelho</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>Shift</kbd> fino · <kbd>Q</kbd><kbd>E</kbd> deslizar · <kbd>Espaço</kbd> pronto</div>
+        <div><b class="t1">Azul</b> <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> · <kbd>Shift dir.</kbd> fino · <kbd>,</kbd><kbd>.</kbd> deslizar · <kbd>Enter</kbd> pronto</div>
+        <div class="touch-warn">Este simulador é controlado pelo teclado — use um computador.</div>
+      </footer>`;
+    this.ui.appendChild(scr);
+    const descMode = () => {
+      const d = scr.querySelector('[data-desc="mode"]')!;
+      d.textContent =
+        s.mode === 'realista'
+          ? 'Tempo real. Um round costuma durar menos de 2 s. Mexer antes do bip é Keikoku.'
+          : 'Mesma física em câmera lenta (50%) e aceleração mais suave para dar tempo de reagir.';
+    };
+    descMode();
+    scr.querySelectorAll<HTMLElement>('.seg').forEach((g) =>
+      g.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest('button');
+        if (!b) return;
+        (s as unknown as Record<string, string>)[g.dataset.name!] = b.dataset.v!;
+        g.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+        this.sfx.click();
+        descMode();
+        this.save();
+      }),
+    );
+    scr.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach((c) =>
+      c.addEventListener('change', () => {
+        (s as unknown as Record<string, boolean>)[c.dataset.name!] = c.checked;
+        this.sfx.muted = s.muted;
+        this.save();
+      }),
+    );
+    scr.querySelector('[data-act=next]')!.addEventListener('click', () => this.showSelect());
+  }
+
+  // ---------------------------------------------------------------- seleção
+  showSelect() {
+    this.endGame();
+    this.screen = 'select';
+    const s = this.settings;
+    const specs: [RobotSpec, RobotSpec] = [this.robot(s.p1), this.robot(s.p2)];
+    this.showcase(specs, [0.42, 0.16, 0.15]);
+    this.ui.innerHTML = '';
+    const scr = el('section', 'screen select');
+    const col = (slot: 0 | 1) => {
+      const c = el('div', `pick team-${slot}`);
+      const robots = allRobots();
+      const chosen = slot === 0 ? s.p1 : s.p2;
+      const who = slot === 0 ? 'Jogador 1' : s.opponent === 'p2' ? 'Jogador 2' : 'Bot';
+      c.innerHTML = `<h2><i></i>${TEAM[slot]} <small>${who}</small></h2>
+        <div class="cards">${robots
+          .map(
+            (r) => `<button class="card ${r.id === chosen ? 'on' : ''}" data-id="${esc(r.id)}">
+              <b>${esc(r.name)}</b><span>${isPreset(r.id) ? 'preset' : 'customizado'}</span></button>`,
+          )
+          .join('')}</div>
+        <div class="sheet">${this.sheet(this.robot(chosen))}</div>
+        <div class="row">
+          <button data-act="edit">${isPreset(chosen) ? 'Customizar a partir deste' : 'Editar'}</button>
+          <button data-act="new">Novo robô</button>
+        </div>`;
+      c.querySelectorAll<HTMLButtonElement>('.card').forEach((b) =>
+        b.addEventListener('click', () => {
+          if (slot === 0) s.p1 = b.dataset.id!;
+          else s.p2 = b.dataset.id!;
+          this.save();
+          this.sfx.click();
+          this.showSelect();
+        }),
+      );
+      c.querySelector('[data-act=edit]')!.addEventListener('click', () => {
+        const base = this.robot(chosen);
+        if (isPreset(chosen)) this.openEditor({ ...base, id: newRobotId(), name: `${base.name.split(' (')[0]} custom` }, slot, true);
+        else this.openEditor(base, slot, false);
+      });
+      c.querySelector('[data-act=new]')!.addEventListener('click', () =>
+        this.openEditor({ ...this.robot('bloco'), id: newRobotId(), name: 'Meu robô' }, slot, true),
+      );
+      return c;
+    };
+    const ok = inspect(specs[0]).ok && inspect(specs[1]).ok;
+    const mid = el('div', 'vs');
+    mid.innerHTML = `<div class="vs-mark">VS</div>
+      <div class="vs-info">${MODES[s.mode].label} · ${s.opponent === 'p2' ? '2 jogadores' : 'contra bot'}</div>
+      <button class="primary big" data-act="fight" ${ok ? '' : 'disabled'}>Lutar!</button>
+      ${ok ? '' : '<p class="warn">Um dos robôs não passou na inspeção</p>'}
+      <button class="ghost" data-act="back">← Menu</button>`;
+    scr.append(col(0), mid, col(1));
+    this.ui.appendChild(scr);
+    mid.querySelector('[data-act=fight]')!.addEventListener('click', () => this.startGame());
+    mid.querySelector('[data-act=back]')!.addEventListener('click', () => this.showMenu());
+  }
+
+  private sheet(spec: RobotSpec) {
+    const r = inspect(spec);
+    const d = r.derived;
+    const rows: [string, string][] = [
+      ['Dimensões', `${fmt(spec.length * 1000)} × ${fmt(spec.width * 1000)} × ${fmt(spec.height * 1000)} mm`],
+      ['Massa', `${fmt(spec.mass * 1000)} g`],
+      ['Rodas', `${spec.wheels.count} × Ø${fmt(spec.wheels.radius * 2000)} mm · μ ${fmt(spec.wheels.friction, 2)}`],
+      ['Motor', `${fmt(spec.motor.freeRpm)} RPM · ${fmt(spec.motor.stallTorque / 0.0980665, 1)} kgf·cm`],
+      ['Lâmina', `${fmt(spec.blade.angleDeg)}° · aresta a ${fmt(spec.blade.edgeClearance * 1000, 2)} mm`],
+      ['Velocidade máx.', `${fmt(d.topSpeed, 2)} m/s`],
+      ['Peso nas rodas', `${fmt(d.wheelLoadFraction * 100)}%`],
+      ['Tração máx.', `${fmt(d.maxTraction, 1)} N <small>(motores: ${fmt(d.motorForce)} N)</small>`],
+    ];
+    return `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      <div class="insp ${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓ Aprovado na inspeção' : '✗ Reprovado: ' + r.checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}</div>`;
+  }
+
+  // ---------------------------------------------------------------- editor
+  private openEditor(spec: RobotSpec, forSlot: 0 | 1, isNew: boolean) {
+    this.screen = 'editor';
+    this.view.setFrameOffset(window.innerWidth > 900 ? -0.06 : 0);
+    this.view.setRobots([spec, null], [forSlot, null]);
+    this.view.setStaticPose(0, { x: 0, z: 0, yaw: 0.5 });
+    this.view.setOrbit(true, 0.3, 0.13, 0.25);
+    this.view.setDebug(true);
+    this.ui.innerHTML = '';
+    const scr = el('section', 'screen editor');
+    const groups = [...new Set(PARAMS.map((p) => p.group))];
+    scr.innerHTML = `
+      <div class="ed-panel">
+        <div class="ed-head">
+          <input class="name" maxlength="28" value="${esc(spec.name)}" aria-label="Nome do robô">
+          <label class="color">Chassi <input type="color" data-color="bodyColor" value="${spec.bodyColor}"></label>
+          <label class="color">Pneu <input type="color" data-color="tireColor" value="${spec.tireColor}"></label>
+        </div>
+        <div class="ed-groups">${groups
+          .map(
+            (g) => `<fieldset><legend>${g}</legend>${PARAMS.filter((p) => p.group === g)
+              .map((p) => this.paramRow(p, spec))
+              .join('')}</fieldset>`,
+          )
+          .join('')}</div>
+      </div>
+      <aside class="ed-side">
+        <h3>Caixa de inspeção</h3>
+        <div class="ed-insp"></div>
+        <div class="ed-derived"></div>
+        <p class="ed-note">A física usa exatamente esta geometria. O ponto amarelo é o centro de massa.</p>
+        <div class="row">
+          <button class="primary" data-act="save">Salvar</button>
+          <button data-act="cancel">Cancelar</button>
+          ${isNew ? '' : '<button class="danger" data-act="del">Excluir</button>'}
+        </div>
+      </aside>`;
+    this.ui.appendChild(scr);
+
+    let rebuildTimer = 0;
+    const refresh = () => {
+      const r = inspect(spec);
+      scr.querySelector('.ed-insp')!.innerHTML = r.checks
+        .map((c) => `<div class="chk ${c.ok ? 'ok' : 'bad'}"><i>${c.ok ? '✓' : '✗'}</i><b>${c.label}</b><span>${esc(c.detail)}</span></div>`)
+        .join('');
+      const d = r.derived;
+      scr.querySelector('.ed-derived')!.innerHTML = `
+        <div><b>${fmt(d.topSpeed, 2)}</b><span>m/s máx.</span></div>
+        <div><b>${fmt(d.wheelLoadFraction * 100)}%</b><span>peso nas rodas</span></div>
+        <div><b>${fmt(d.maxTraction, 1)} N</b><span>tração máx.</span></div>
+        <div><b>${fmt(d.motorForce)} N</b><span>força dos motores</span></div>`;
+      (scr.querySelector('[data-act=save]') as HTMLButtonElement).disabled = false;
+      clearTimeout(rebuildTimer);
+      rebuildTimer = window.setTimeout(() => {
+        this.view.setRobots([spec, null], [forSlot, null]);
+        this.view.setStaticPose(0, { x: 0, z: 0, yaw: 0.5 });
+        this.view.setDebug(true);
+      }, 60);
+    };
+    refresh();
+
+    scr.querySelector<HTMLInputElement>('.name')!.addEventListener('input', (e) => (spec.name = (e.target as HTMLInputElement).value || 'Sem nome'));
+    scr.querySelectorAll<HTMLInputElement>('input[data-color]').forEach((c) =>
+      c.addEventListener('input', () => {
+        (spec as unknown as Record<string, string>)[c.dataset.color!] = c.value;
+        refresh();
+      }),
+    );
+    scr.querySelectorAll<HTMLElement>('.prm').forEach((row) => {
+      const p = PARAMS.find((x) => x.key === row.dataset.key)!;
+      const range = row.querySelector<HTMLInputElement>('input[type=range]')!;
+      const num = row.querySelector<HTMLInputElement>('input[type=number]')!;
+      const set = (v: number) => {
+        if (!Number.isFinite(v)) return;
+        p.apply(spec, Math.max(p.min, Math.min(p.max, v)));
+        range.value = String(p.toUi(spec));
+        num.value = String(p.toUi(spec));
+        refresh();
+      };
+      range.addEventListener('input', () => set(+range.value));
+      num.addEventListener('change', () => set(+num.value));
+    });
+    scr.querySelector('[data-act=cancel]')!.addEventListener('click', () => this.showSelect());
+    scr.querySelector('[data-act=save]')!.addEventListener('click', () => {
+      const list = loadCustomRobots().filter((r) => r.id !== spec.id);
+      list.push(spec);
+      saveCustomRobots(list);
+      if (forSlot === 0) this.settings.p1 = spec.id;
+      else this.settings.p2 = spec.id;
+      this.save();
+      this.showSelect();
+    });
+    scr.querySelector('[data-act=del]')?.addEventListener('click', () => {
+      if (!confirm(`Excluir "${spec.name}"?`)) return;
+      saveCustomRobots(loadCustomRobots().filter((r) => r.id !== spec.id));
+      if (this.settings.p1 === spec.id) this.settings.p1 = PRESETS[0].id;
+      if (this.settings.p2 === spec.id) this.settings.p2 = PRESETS[1].id;
+      this.save();
+      this.showSelect();
+    });
+  }
+
+  private paramRow(p: ParamDef, spec: RobotSpec) {
+    const v = p.toUi(spec);
+    return `<div class="prm" data-key="${p.key}">
+      <label>${p.label}${p.hint ? `<small>${p.hint}</small>` : ''}</label>
+      <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}">
+      <span class="num"><input type="number" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}"><em>${p.unit}</em></span>
+    </div>`;
+  }
+
+  // ---------------------------------------------------------------- luta
+  async startGame() {
+    this.endGame();
+    const s = this.settings;
+    const specs: [RobotSpec, RobotSpec] = [this.robot(s.p1), this.robot(s.p2)];
+    if (!inspect(specs[0]).ok || !inspect(specs[1]).ok) return this.showSelect();
+    this.screen = 'game';
+    this.ui.innerHTML = '';
+    this.view.setFrameOffset(0);
+    const g = new Game(this.view, this.hud, this.sfx, this.keys, {
+      specs,
+      mode: MODES[s.mode],
+      opponent: s.opponent,
+      rules: { noCombatRule: s.noCombatRule },
+      replay: s.replay,
+      debug: s.debug,
+    });
+    this.game = g;
+    g.onEnd = (w, reason) => this.showResult(w, reason);
+    await g.start();
+  }
+
+  private togglePause() {
+    if (!this.game) return;
+    if (this.pauseEl) return this.closePause();
+    this.game.paused = true;
+    const p = el('div', 'screen pause');
+    p.innerHTML = `<div class="panel narrow">
+      <h2>Pausa</h2>
+      <button class="primary" data-act="resume">Continuar <kbd>Esc</kbd></button>
+      <button data-act="restart">Reiniciar partida</button>
+      <button data-act="select">Trocar robôs</button>
+      <button data-act="menu">Menu</button>
+      <p class="desc">A física fica congelada durante a pausa.</p></div>`;
+    this.ui.appendChild(p);
+    this.pauseEl = p;
+    p.querySelector('[data-act=resume]')!.addEventListener('click', () => this.closePause());
+    p.querySelector('[data-act=restart]')!.addEventListener('click', () => this.startGame());
+    p.querySelector('[data-act=select]')!.addEventListener('click', () => this.showSelect());
+    p.querySelector('[data-act=menu]')!.addEventListener('click', () => this.showMenu());
+  }
+
+  private closePause() {
+    this.pauseEl?.remove();
+    this.pauseEl = null;
+    if (this.game) this.game.paused = false;
+    this.keys.clearPressed();
+  }
+
+  private showResult(winner: number | null, reason: string) {
+    if (!this.game) return;
+    this.screen = 'result';
+    this.hud.dim();
+    const g = this.game;
+    const sc = g.match.ref.s.scores;
+    const specs = g.opts.specs;
+    const r = el('section', 'screen result');
+    const color = winner === null ? '#ccc' : TEAM_COLORS[winner];
+    r.innerHTML = `<div class="panel narrow" style="--team:${color}">
+      <div class="res-label">${winner === null ? 'Empate' : 'Vencedor'}</div>
+      <h2 class="res-winner">${winner === null ? 'Hikiwake' : `${TEAM[winner]} · ${esc(specs[winner].name)}`}</h2>
+      <div class="res-score"><span class="t0">${sc[0]}</span><i>×</i><span class="t1">${sc[1]}</span></div>
+      <p class="desc">${esc(reason)}</p>
+      <button class="primary" data-act="again">Revanche <kbd>Enter</kbd></button>
+      <button data-act="select">Trocar robôs</button>
+      <button data-act="menu">Menu</button></div>`;
+    this.ui.appendChild(r);
+    r.querySelector('[data-act=again]')!.addEventListener('click', () => this.startGame());
+    r.querySelector('[data-act=select]')!.addEventListener('click', () => this.showSelect());
+    r.querySelector('[data-act=menu]')!.addEventListener('click', () => this.showMenu());
+  }
+}
