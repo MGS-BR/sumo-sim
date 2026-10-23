@@ -79,6 +79,8 @@ export interface PlaceCommand {
 export interface ControlFrame {
   drive: DriveCommand;
   place: PlaceCommand;
+  /** Pose absoluta desejada no posicionamento (arrastar com o mouse). Tem prioridade sobre `place`. */
+  placeTarget?: Pose2D | null;
   ready: boolean;
 }
 

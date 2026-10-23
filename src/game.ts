@@ -5,6 +5,7 @@ import type { ControlFrame, RobotSpec } from './sim/types';
 import type { Controller } from './control/controller';
 import { KeyboardController, KEYMAPS, KeyboardState } from './control/keyboard';
 import { SparringBot, type BotLevel } from './control/sparringBot';
+import { MousePlacement } from './control/mousePlacement';
 import type { ArenaView } from './render/arenaView';
 import { CAMERA_LABELS } from './render/arenaView';
 import type { Hud } from './ui/hud';
@@ -38,6 +39,7 @@ export class Game {
   private replayStartDelay = -1;
   onEnd: (winner: number | null, reason: string) => void = () => {};
   private pendingEnd: { winner: number | null; reason: string; delay: number } | null = null;
+  private mouse: MousePlacement | null = null;
 
   constructor(
     private view: ArenaView,
@@ -54,18 +56,24 @@ export class Game {
     const p2: Controller =
       o.opponent === 'p2' ? new KeyboardController(this.keys, KEYMAPS[1], o.mode, 'Jogador 2') : new SparringBot(o.opponent.slice(4) as BotLevel);
     this.controllers = [p1, p2];
+    this.mouse = new MousePlacement(this.view, {
+      active: () => this.match.ref.s.phase === 'placement' && !this.paused && !this.replaying,
+      canEdit: (i) => this.controllers[i].kind === 'keyboard' && !this.match.ref.s.ready[i],
+      pose: (i) => this.match.placements[i],
+    });
+    this.hud.onReady = (i) => this.mouse?.requestReady(i);
     this.view.setRobots(o.specs);
     this.view.setOrbit(false);
     this.view.setDebug(o.debug);
     this.view.showPlacementZones(true);
     this.view.applySnapshot(this.match.lastSnapshot);
     this.view.snapCamera();
-    this.hud.setup(o.specs, [p1.label, p2.label]);
+    this.hud.setup(o.specs, [p1.label, p2.label], [true, p2.kind === 'keyboard']);
     this.hud.setDebug(o.debug);
     this.hud.show();
     this.keys.clearPressed();
     this.updateHelp();
-    this.hud.flash('SHIKIRI', `Round 1 · ${o.mode.label}`, null, 1.6);
+    this.hud.toast(`Round 1 · modo ${o.mode.label}`);
   }
 
   private updateHelp() {
@@ -79,7 +87,8 @@ export class Game {
       : placing
         ? '<b>Azul</b> ↑/↓ mover · ←/→ girar · , . deslizar · <kbd>Enter</kbd> pronto'
         : '<b>Azul</b> setas · Shift dir. ajuste fino';
-    this.hud.setHelp(`${p1}<span class="sep"></span>${p2}<span class="sep"></span><kbd>C</kbd> câmera (${CAMERA_LABELS[this.view.cameraMode]}) · <kbd>F2</kbd> debug · <kbd>Esc</kbd> pausa`);
+    const mouse = placing ? '<b>Mouse</b> arraste o robô · roda gira (Shift = fino)<span class="sep"></span>' : '';
+    this.hud.setHelp(`${mouse}${p1}<span class="sep"></span>${p2}<span class="sep"></span><kbd>C</kbd> câmera (${CAMERA_LABELS[this.view.cameraMode]}) · <kbd>F2</kbd> debug · <kbd>Esc</kbd> pausa`);
   }
 
   setDebug(on: boolean) {
@@ -133,6 +142,7 @@ export class Game {
       const frames = this.controllers.map((c, i) =>
         c.poll({ me: i, phase: m.ref.s.phase, dt: PHYSICS_DT, snapshot: m.lastSnapshot, placement: m.placements[i] }),
       ) as [ControlFrame, ControlFrame];
+      if (m.ref.s.phase === 'placement') this.mouse?.apply(frames);
       const events = m.step(frames);
       if (events.length) this.handleEvents(events);
       if (this.replayStartDelay >= 0) break;
@@ -146,6 +156,7 @@ export class Game {
       switch (e.type) {
         case 'phase':
           this.view.showPlacementZones(e.phase === 'placement');
+          if (e.phase !== 'placement') this.mouse?.cancel();
           if (e.phase === 'placement') {
             this.keys.clearPressed();
             this.updateHelp();
@@ -236,6 +247,9 @@ export class Game {
   }
 
   dispose() {
+    this.mouse?.dispose();
+    this.mouse = null;
+    this.hud.onReady = () => {};
     this.match?.dispose();
     this.controllers?.forEach((c) => c.dispose?.());
   }

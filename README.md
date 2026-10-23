@@ -9,7 +9,7 @@ Requer Node 20+.
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # 38 testes: física, juiz, partidas bot × bot, determinismo
+npm test             # 45 testes: física, juiz, partidas bot × bot, determinismo
 npm run build        # dist/ para hospedar
 npm run build:single # dist-single/index.html — um arquivo só, abre direto no navegador
 ```
@@ -24,6 +24,8 @@ Máquina fraca? Abra com `?gfx=low` (sem sombras e sem antialias).
 | Ajuste fino | Shift esq. | Shift dir. |
 | Posicionar: deslizar | Q / E | , / . |
 | Pronto | Espaço | Enter |
+
+No posicionamento também dá para **arrastar o robô com o mouse** (roda gira, Shift = giro fino) e clicar em **Pronto**.
 
 **C** câmera · **F2** forças (debug) · **Esc** pausa
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { ARENA, SHIKIRI_HALF_LEN } from '../sim/arena';
+import { PLACEMENT_LINE_X } from '../sim/placement';
 import { quatFromYaw } from '../sim/math';
 import type { ReplayFrame } from '../sim/match';
 import type { Pose2D, RobotSpec, SimSnapshot } from '../sim/types';
@@ -156,13 +157,13 @@ export class ArenaView {
       l.receiveShadow = true;
       this.scene.add(l);
     }
-    // Faixa de posicionamento (só aparece na fase de shikiri)
-    const zoneMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.06, depthWrite: false });
+    // Faixa de posicionamento (só aparece na fase de shikiri): da borda interna da linha até a tawara
+    const zoneMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.07, depthWrite: false });
     this.zones = [1, -1].map((sign) => {
-      const len = R - ARENA.shikiriInnerX - ARENA.shikiriWidth;
+      const len = R - PLACEMENT_LINE_X;
       const z = new THREE.Mesh(new THREE.PlaneGeometry(len, SHIKIRI_HALF_LEN * 2), zoneMat);
       z.rotation.x = -Math.PI / 2;
-      z.position.set(sign * (ARENA.shikiriInnerX + ARENA.shikiriWidth + len / 2), H + 0.0003, 0);
+      z.position.set(sign * (PLACEMENT_LINE_X + len / 2), H + 0.0003, 0);
       z.visible = false;
       this.scene.add(z);
       return z;
@@ -170,20 +171,106 @@ export class ArenaView {
   }
   private zones: THREE.Mesh[] = [];
 
+  private placing = false;
   showPlacementZones(on: boolean) {
+    this.placing = on;
     for (const z of this.zones) z.visible = on;
+    this.rings.forEach((r) => r && (r.visible = on));
+    if (!on) this.renderer.domElement.style.cursor = '';
+  }
+
+  // ------------------------------------------------ seleção com o mouse
+  private raycaster = new THREE.Raycaster();
+  private ndc = new THREE.Vector2();
+  private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -ARENA.dohyoHeight);
+  private rings: (THREE.Mesh | null)[] = [null, null];
+
+  private aim(clientX: number, clientY: number) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+    this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    return true;
+  }
+
+  /** Índice do robô sob o cursor (ou do anel de posicionamento), ou null */
+  pickRobot(clientX: number, clientY: number): number | null {
+    if (!this.aim(clientX, clientY)) return null;
+    let best: { i: number; d: number } | null = null;
+    for (let i = 0; i < 2; i++) {
+      const rv = this.robots[i];
+      if (!rv) continue;
+      const objs: THREE.Object3D[] = [rv.group];
+      const hits = this.raycaster.intersectObjects(objs, true);
+      // só malhas: linhas (arestas) têm limiar de 1 m no Raycaster e "acertariam" o robô errado
+      const hit = hits.find((h) => h.object.visible && (h.object as THREE.Mesh).isMesh);
+      if (hit && (!best || hit.distance < best.d)) best = { i, d: hit.distance };
+    }
+    return best ? best.i : null;
+  }
+
+  /** Ponto do cursor no plano do dohyo */
+  groundPoint(clientX: number, clientY: number): { x: number; z: number } | null {
+    if (!this.aim(clientX, clientY)) return null;
+    const p = new THREE.Vector3();
+    return this.raycaster.ray.intersectPlane(this.groundPlane, p) ? { x: p.x, z: p.z } : null;
+  }
+
+  /** Destaque do anel de posicionamento: 0 normal, 1 cursor em cima, 2 arrastando */
+  setPlacementHighlight(states: [number, number]) {
+    let cursor = '';
+    for (let i = 0; i < 2; i++) {
+      const ring = this.rings[i];
+      if (!ring) continue;
+      const m = ring.material as THREE.MeshBasicMaterial;
+      m.opacity = [0.35, 0.8, 1][states[i]] ?? 0.35;
+      m.color.set(states[i] === 2 ? '#ffffff' : i === 0 ? '#e23b3b' : '#2f7be0');
+      if (states[i] === 2) cursor = 'grabbing';
+      else if (states[i] === 1 && cursor !== 'grabbing') cursor = 'grab';
+    }
+    this.renderer.domElement.style.cursor = this.placing ? cursor : '';
+  }
+
+  /** Suspende a câmera livre enquanto o robô é arrastado */
+  suspendControls(on: boolean) {
+    this.controls.enabled = !on && this.cameraMode === 'livre';
+  }
+
+  get canvas() {
+    return this.renderer.domElement;
   }
 
   setRobots(specs: [RobotSpec | null, RobotSpec | null], teams: [number | null, number | null] = [0, 1]) {
     for (let i = 0; i < 2; i++) {
       const old = this.robots[i];
+      const oldRing = this.rings[i];
+      if (oldRing) {
+        oldRing.geometry.dispose();
+        (oldRing.material as THREE.Material).dispose();
+      }
       if (old) {
         this.scene.remove(old.group);
         old.dispose();
       }
       const s = specs[i];
       this.robots[i] = s ? buildRobotView(s, teams[i]) : null;
-      if (this.robots[i]) this.scene.add(this.robots[i]!.group);
+      this.rings[i] = null;
+      const rv = this.robots[i];
+      if (rv) {
+        this.scene.add(rv.group);
+        // anel de posicionamento (filho do robô, no chão)
+        const rad = Math.hypot(s!.length, s!.width) / 2 + 0.006;
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(rad - 0.004, rad, 48),
+          new THREE.MeshBasicMaterial({ color: i === 0 ? '#e23b3b' : '#2f7be0', transparent: true, opacity: 0.35, depthWrite: false }),
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.0006;
+        ring.visible = this.placing;
+        ring.raycast = () => {}; // não atrapalha o pick
+        rv.group.add(ring);
+        this.rings[i] = ring;
+      }
     }
     this.rebuildDebug();
   }

@@ -24,7 +24,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF02 | Robôs em escala real: até 100 × 100 mm, altura livre, até 500 g | ✅ |
 | RF03 | Física 3D: tração limitada por μ·N em cada roda; rampa da lâmina reduz a carga nas rodas do rival | ✅ |
 | RF04 | Controle por teclado, P1 (WASD) e P2 (setas), com ajuste fino (Shift) e rampa de aceleração (simula PWM) | ✅ |
-| RF05 | Fase de posicionamento (shikiri) com validação do Art. 10 | ✅ |
+| RF05 | Fase de posicionamento (shikiri) com validação do Art. 10, pelo teclado ou arrastando com o mouse (roda gira; toque também funciona) | ✅ |
 | RF06 | Juiz automático: rounds, Yuko, Shinitai, Torinaoshi, Hansoku, Keikoku, Yusei, prorrogação | ✅ |
 | RF07 | HUD: placar de Yuko, Keikoku, round, relógio, contagem do juiz (1-2-3), mensagens | ✅ |
 | RF08 | Presets prontos (Kunai, Bloco, Trator) | ✅ |
@@ -74,7 +74,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | Art. 8: 3 rounds de 1 min, vence quem fizer 2 Yuko | ✅ |
 | Art. 8: com 1 Yuko no fim, vence quem tem | ✅ |
 | Art. 8 / 15: sem vencedor → Yusei; sem decisão → prorrogação de 3 min, morte súbita | ✅ Yusei por métrica de domínio (tempo empurrando + posição central). Diferença < 15% → prorrogação |
-| Art. 10: posicionamento atrás da shikiri-sen, tocando a faixa | ✅ Movimentos ilegais são bloqueados |
+| Art. 10: posicionamento atrás da shikiri-sen, tocando a faixa | ✅ Basta uma parte do robô na faixa. O robô pode ficar sobre a linha marrom, sem passar da borda dela voltada ao centro. Pedidos fora da regra são corrigidos para a pose válida mais próxima (o robô recua ao girar encostado na linha) |
 | Art. 12: Torinaoshi (saída simultânea, travados por 3 s) | ✅ Janela de simultaneidade de 50 ms |
 | Art. 13: Yuko quando o rival toca fora | ✅ |
 | Art. 13 (3º item): atacante que conduz o rival para fora vence mesmo saindo antes | ✅ Exige que tenha empurrado nos últimos 0,5 s e que o rival não estivesse empurrando |
@@ -90,6 +90,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 2. **Art. 17, não-combate:** aplicado ao pé da letra, com 3 s e ponto para os dois, mas só conta enquanto a distância não está diminuindo. Pode ser desligado no menu.
 3. **"Parado":** velocidade < 8 mm/s e giro < 0,15 rad/s, medidos pela variação de pose.
 4. **"Correndo na mesma órbita" (Art. 12):** ainda não detectado automaticamente.
+5. **"Não exceder a shikiri-sen" (Art. 10):** o limite é a borda da linha voltada para o centro, ou seja, encostar ou ficar sobre a linha marrom é permitido. Se a equipe entender que o robô precisa ficar inteiro atrás da linha, basta trocar `PLACEMENT_LINE_X` em `src/sim/placement.ts`.
 
 ## 6. Controles
 
@@ -99,6 +100,8 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | Ajuste fino | Shift esquerdo | Shift direito ou ; |
 | Posicionamento: deslizar | Q / E | , / . (ou Delete / PgDn) |
 | Pronto | Espaço | Enter |
+
+Mouse no posicionamento: arraste o robô para mover, use a roda para girar (7,5° por clique, 1° com Shift) e o botão **Pronto** no painel do jogador.
 
 Gerais: **C** câmera · **F2** debug · **Esc** pausa · qualquer tecla pula o replay.
 

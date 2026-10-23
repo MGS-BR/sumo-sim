@@ -5,7 +5,7 @@ import { inspect } from '../src/sim/inspection';
 import { theoreticalTopSpeed, wheelForces } from '../src/sim/drive';
 import { PHYSICS_HZ } from '../src/sim/modes';
 import { ARENA } from '../src/sim/arena';
-import { defaultPlacement, nudgePlacement, placementIssue } from '../src/sim/placement';
+import { constrainPlacement, defaultPlacement, footprint, nudgePlacement, placementIssue, PLACEMENT_LINE_X } from '../src/sim/placement';
 import { quatFromYaw, rotate, yawOf } from '../src/sim/math';
 import type { RobotSpec } from '../src/sim/types';
 
@@ -157,13 +157,73 @@ describe('posicionamento (Art. 10)', () => {
   it('não deixa passar da shikiri-sen nem sair da faixa', () => {
     const p = clonePreset('bloco');
     const pose = defaultPlacement(p, 0);
-    expect(placementIssue(p, { ...pose, x: pose.x - 0.01 }, 0)).toMatch(/shikiri/);
+    expect(placementIssue(p, { ...pose, x: pose.x - 0.02 }, 0)).toMatch(/shikiri/);
     expect(placementIssue(p, { ...pose, z: 0.2 }, 0)).toMatch(/faixa/);
     // tentar avançar só desliza até o limite
     let q = pose;
     for (let i = 0; i < 100; i++) q = nudgePlacement(p, q, 0, { forward: 0.1, side: 0, yaw: 0 }, 0.01);
     expect(placementIssue(p, q, 0)).toBeNull();
   });
+  it('basta uma parte do robô na faixa, não o robô inteiro', () => {
+    const p = clonePreset('bloco');
+    const pose = defaultPlacement(p, 0);
+    // centro a 9 cm do eixo: só 1 cm do robô fica dentro da faixa de ±5 cm
+    expect(placementIssue(p, { ...pose, z: 0.09 }, 0)).toBeNull();
+    expect(placementIssue(p, { ...pose, z: -0.09 }, 0)).toBeNull();
+    // fora por completo: inválido
+    expect(placementIssue(p, { ...pose, z: 0.11 }, 0)).toMatch(/faixa/);
+  });
+
+  it('pode encostar sobre a linha marrom, mas não passar dela', () => {
+    const p = clonePreset('bloco');
+    const onLine = { x: PLACEMENT_LINE_X + p.length / 2, z: 0, yaw: Math.PI };
+    expect(placementIssue(p, onLine, 0)).toBeNull();
+    expect(placementIssue(p, { ...onLine, x: onLine.x - 0.001 }, 0)).toMatch(/shikiri/);
+    // espelhado para o azul
+    expect(placementIssue(p, { x: -onLine.x, z: 0, yaw: 0 }, 1)).toBeNull();
+    expect(placementIssue(p, { x: -onLine.x + 0.001, z: 0, yaw: 0 }, 1)).toMatch(/shikiri/);
+  });
+
+  it('gira mesmo encostado na linha: o robô recua o necessário', () => {
+    for (const p of PRESETS) {
+      for (const player of [0, 1]) {
+        let q = defaultPlacement(p, player);
+        for (let i = 0; i < 100; i++) q = nudgePlacement(p, q, player, { forward: 0, side: 0, yaw: 1.6 }, 0.01);
+        const start = defaultPlacement(p, player).yaw;
+        expect(Math.abs(q.yaw - start)).toBeCloseTo(1.6, 5);
+        expect(placementIssue(p, q, player)).toBeNull();
+      }
+    }
+  });
+
+  it('arrastar para qualquer lugar sempre resulta em pose legal e próxima do pedido', () => {
+    const p = clonePreset('kunai');
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31) * 2 - 1;
+    for (let k = 0; k < 500; k++) {
+      const player = k % 2;
+      const want = { x: rnd() * 0.5, z: rnd() * 0.5, yaw: rnd() * Math.PI };
+      const got = constrainPlacement(p, want, player);
+      expect(got).not.toBeNull();
+      expect(placementIssue(p, got!, player)).toBeNull();
+      expect(got!.yaw).toBe(want.yaw);
+    }
+    // pedido já válido não é alterado
+    const ok = { x: 0.2, z: 0.03, yaw: 2.5 };
+    expect(constrainPlacement(p, ok, 0)).toEqual(ok);
+    // arrastar para o lado do rival encosta na linha, sem atravessar
+    const crossed = constrainPlacement(p, { x: -0.3, z: 0, yaw: Math.PI }, 0)!;
+    expect(Math.min(...footprint(p, crossed).map(([x]) => x))).toBeCloseTo(PLACEMENT_LINE_X, 4);
+  });
+
+  it('entrada inválida (NaN/Infinity) é rejeitada', () => {
+    const p = clonePreset('bloco');
+    expect(constrainPlacement(p, { x: NaN, z: 0, yaw: 0 }, 0)).toBeNull();
+    expect(constrainPlacement(p, { x: 0.2, z: Infinity, yaw: 0 }, 0)).toBeNull();
+    const pose = defaultPlacement(p, 0);
+    expect(nudgePlacement(p, pose, 0, { forward: NaN, side: 0, yaw: 0 }, 0.01)).toEqual(pose);
+  });
+
   it('posição em diagonal tocando a faixa é aceita (Fig. 9)', () => {
     const p = clonePreset('bloco');
     expect(placementIssue(p, { x: 0.2, z: 0.09, yaw: Math.PI * 0.75 }, 0)).toBeNull();

@@ -175,12 +175,15 @@ export class SumoWorld {
 
   setCommand(i: number, cmd: DriveCommand) {
     const c = this.robots[i].command;
-    c.left = Math.max(-1, Math.min(1, cmd.left));
-    c.right = Math.max(-1, Math.min(1, cmd.right));
+    // NaN/Infinity viram 0: comando inválido não pode corromper a simulação
+    const safe = (v: number) => (Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0);
+    c.left = safe(cmd.left);
+    c.right = safe(cmd.right);
   }
 
   /** Teleporta o robô para uma pose no dohyo, parado. */
   setPose(i: number, pose: Pose2D) {
+    if (![pose.x, pose.z, pose.yaw].every(Number.isFinite)) return;
     const r = this.robots[i];
     r.body.setTranslation({ x: pose.x, y: ARENA.dohyoHeight + PHYS.spawnLift, z: pose.z }, true);
     r.body.setRotation(quatFromYaw(pose.yaw), true);

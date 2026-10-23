@@ -19,7 +19,10 @@ const COUNT_LABEL: Record<string, string> = {
 
 export class Hud {
   readonly root = h('div', 'hud');
-  private teams: { el: HTMLElement; robot: HTMLElement; dots: HTMLElement; kei: HTMLElement; status: HTMLElement }[] = [];
+  private teams: { el: HTMLElement; robot: HTMLElement; dots: HTMLElement; kei: HTMLElement; status: HTMLElement; ready: HTMLButtonElement }[] = [];
+  private humans: [boolean, boolean] = [true, true];
+  /** Clique no botão "Pronto" de um lado */
+  onReady: (i: number) => void = () => {};
   private round = h('div', 'hud-round');
   private time = h('div', 'hud-time');
   private big = h('div', 'hud-big');
@@ -41,8 +44,16 @@ export class Hud {
       const dots = h('div', 'hud-dots');
       const kei = h('div', 'hud-kei');
       const status = h('div', 'hud-status');
-      el.append(name, robot, dots, kei, status);
-      this.teams.push({ el, robot, dots, kei, status });
+      const ready = h('button', 'hud-ready', 'Pronto') as HTMLButtonElement;
+      ready.type = 'button';
+      ready.hidden = true;
+      ready.addEventListener('click', (e) => {
+        e.stopPropagation();
+        ready.blur(); // Espaço/Enter não "clicam" de novo depois
+        this.onReady(i);
+      });
+      el.append(name, robot, dots, kei, status, ready);
+      this.teams.push({ el, robot, dots, kei, status, ready });
     }
     const clock = h('div', 'hud-clock');
     clock.append(this.round, this.time);
@@ -65,7 +76,8 @@ export class Hud {
     this.root.hidden = true;
   }
 
-  setup(specs: [RobotSpec, RobotSpec], labels: [string, string]) {
+  setup(specs: [RobotSpec, RobotSpec], labels: [string, string], humans: [boolean, boolean] = [true, true]) {
+    this.humans = humans;
     for (let i = 0; i < 2; i++) this.teams[i].robot.textContent = `${specs[i].name} · ${labels[i]}`;
     this.toasts.innerHTML = '';
     this.big.textContent = '';
@@ -107,6 +119,7 @@ export class Hud {
       t.kei.textContent = s.keikoku[i] ? `Keikoku ×${s.keikoku[i]}` : '';
       t.status.textContent = s.phase === 'placement' ? (s.ready[i] ? 'pronto ✓' : 'posicionando…') : '';
       t.el.classList.toggle('ready', s.phase === 'placement' && s.ready[i]);
+      t.ready.hidden = !(s.phase === 'placement' && !s.ready[i] && this.humans[i] && !replaying);
     }
     this.round.textContent = s.extension ? 'PRORROGAÇÃO' : `ROUND ${Math.min(s.round, ref.rules.rounds)} / ${ref.rules.rounds}`;
     const left = s.phase === 'fight' || s.phase === 'deciding' ? ref.timeLeft : ref.roundDuration;
@@ -116,6 +129,8 @@ export class Hud {
     this.time.classList.toggle('low', left < 10 && s.phase === 'fight');
 
     // mensagens persistentes por fase (quando não há flash ativo)
+    // no posicionamento o título fica pequeno no topo para não cobrir os robôs
+    this.center.classList.toggle('compact', s.phase === 'placement' && !replaying && this.now > this.flashUntil);
     if (this.now > this.flashUntil) {
       this.center.dataset.team = '';
       this.center.classList.remove('pop');

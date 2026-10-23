@@ -1,6 +1,6 @@
 import { SumoWorld, loadRapier } from './physics';
 import { Referee, type RefEvent, type RefFacts, type RobotFact, type RulesConfig } from './referee';
-import { defaultPlacement, nudgePlacement } from './placement';
+import { constrainPlacement, defaultPlacement, nudgePlacement } from './placement';
 import { PHYSICS_DT } from './modes';
 import type { ModeConfig } from './modes';
 import { wrapAngle } from './math';
@@ -21,6 +21,13 @@ export interface MatchOptions {
 
 const REPLAY_SECONDS = 3;
 const REPLAY_EVERY = 2; // grava 1 a cada 2 ticks (240 Hz)
+
+const finite = (v: number) => (Number.isFinite(v) ? v : 0);
+/** Entrada vinda de fora (teclado hoje, rede amanhã) nunca chega crua na física */
+function sanitizePlace(p: ControlFrame['place']): ControlFrame['place'] {
+  const lim = (v: number, m: number) => Math.max(-m, Math.min(m, finite(v)));
+  return { forward: lim(p.forward, 0.2), side: lim(p.side, 0.2), yaw: lim(p.yaw, 4) };
+}
 
 /**
  * Partida = física + juiz + posicionamento. Avança em ticks fixos a partir de
@@ -80,7 +87,10 @@ export class Match {
       for (const i of [0, 1]) {
         const f = frames[i];
         if (f.ready) this.ready[i] = true;
-        if (!this.ready[i]) this.placements[i] = nudgePlacement(this.specs[i], this.placements[i], i, f.place, dt);
+        if (!this.ready[i]) {
+          if (f.placeTarget) this.placements[i] = constrainPlacement(this.specs[i], f.placeTarget, i) ?? this.placements[i];
+          else this.placements[i] = nudgePlacement(this.specs[i], this.placements[i], i, sanitizePlace(f.place), dt);
+        }
         this.sim.setPose(i, this.placements[i]);
         this.sim.setCommand(i, { left: 0, right: 0 });
       }
