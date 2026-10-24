@@ -423,17 +423,33 @@ export class ArenaView {
     }
     if (!this.evidence) {
       const g = new THREE.Group();
-      const mat = new THREE.MeshBasicMaterial({ color: '#f2c14e', transparent: true, opacity: 0.95, depthTest: false });
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.009, 0.0125, 40), mat);
+      // Respeita a profundidade: se o ponto estiver atrás do dohyo/robô, fica escondido
+      // (antes era desenhado por cima de tudo e parecia estar no lugar errado)
+      const mk = (opacity: number) =>
+        new THREE.MeshBasicMaterial({
+          color: '#f2c14e',
+          transparent: true,
+          opacity,
+          depthTest: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -4,
+          polygonOffsetUnits: -4,
+          side: THREE.DoubleSide,
+        });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.006, 0.0085, 40), mk(0.95));
       ring.rotation.x = -Math.PI / 2;
-      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.003, 20), mat);
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.0022, 20), mk(1));
       dot.rotation.x = -Math.PI / 2;
-      const outer = new THREE.Mesh(new THREE.RingGeometry(0.018, 0.02, 48), mat.clone());
+      const outer = new THREE.Mesh(new THREE.RingGeometry(0.011, 0.0125, 48), mk(0.9));
       outer.rotation.x = -Math.PI / 2;
       outer.name = 'pulse';
-      g.add(ring, dot, outer);
-      g.renderOrder = 20;
-      g.traverse((o) => (o.renderOrder = 20));
+      // pino vertical: identifica o ponto mesmo com a câmera rente ao chão
+      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.0007, 0.0007, 0.035, 8), mk(0.85));
+      pin.position.y = 0.0175;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.0022, 12, 8), mk(1));
+      head.position.y = 0.036;
+      g.add(ring, dot, outer, pin, head);
       this.scene.add(g);
       this.evidence = g;
     }

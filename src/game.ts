@@ -4,11 +4,12 @@ import type { RefEvent, RulesConfig } from './sim/referee';
 import type { ControlFrame, RobotSpec, SimSnapshot } from './sim/types';
 import type { OutTouch } from './sim/match';
 import type { Controller } from './control/controller';
-import { KeyboardController, KEYMAPS, KeyboardState } from './control/keyboard';
+import { KeyboardController, KEYMAPS, KeyboardState, mergedKeyMap } from './control/keyboard';
 import { SparringBot, type BotLevel } from './control/sparringBot';
 import { MousePlacement } from './control/mousePlacement';
 import type { ArenaView } from './render/arenaView';
 import { CAMERA_LABELS } from './render/arenaView';
+import { icon, kbdArrow } from './ui/icons';
 import type { Hud } from './ui/hud';
 import type { Sfx } from './audio';
 
@@ -52,7 +53,9 @@ export class Game {
   async start() {
     const o = this.opts;
     this.match = await Match.create({ specs: o.specs, mode: o.mode, rules: o.rules });
-    const p1 = new KeyboardController(this.keys, KEYMAPS[0], o.mode, 'Jogador 1');
+    const vsBot = o.opponent !== 'p2';
+    // sozinho contra o bot: WASD e setas controlam o mesmo robô
+    const p1 = new KeyboardController(this.keys, vsBot ? mergedKeyMap(KEYMAPS[0], KEYMAPS[1]) : KEYMAPS[0], o.mode, 'Jogador 1');
     const p2: Controller =
       o.opponent === 'p2' ? new KeyboardController(this.keys, KEYMAPS[1], o.mode, 'Jogador 2') : new SparringBot(o.opponent.slice(4) as BotLevel);
     this.controllers = [p1, p2];
@@ -79,15 +82,24 @@ export class Game {
   private updateHelp() {
     const bot = this.opts.opponent !== 'p2';
     const placing = this.match.ref.s.phase === 'placement';
-    const p1 = placing
-      ? '<b>Vermelho</b> W/S mover · A/D girar · Q/E deslizar · <kbd>Espaço</kbd> pronto'
-      : '<b>Vermelho</b> W/A/S/D · Shift ajuste fino';
-    const p2 = bot
-      ? '<b>Azul</b> bot'
-      : placing
-        ? '<b>Azul</b> ↑/↓ mover · ←/→ girar · , . deslizar · <kbd>Enter</kbd> pronto'
-        : '<b>Azul</b> setas · Shift dir. ajuste fino';
-    const mouse = placing ? '<b>Mouse</b> arraste o robô · roda gira (Shift = fino)<span class="sep"></span>' : '';
+    const arrows = `${kbdArrow('up', 'cima')}${kbdArrow('left', 'esquerda')}${kbdArrow('down', 'baixo')}${kbdArrow('right', 'direita')}`;
+    const wasd = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>';
+    let p1: string;
+    let p2: string;
+    if (bot) {
+      p1 = placing
+        ? `<b>Você</b> ${wasd} ou ${arrows} posicionar · <kbd>Q</kbd><kbd>E</kbd> deslizar · <kbd>Espaço</kbd> pronto`
+        : `<b>Você</b> ${wasd} ou ${arrows} · Shift ajuste fino`;
+      p2 = '<b>Azul</b> bot';
+    } else {
+      p1 = placing
+        ? `<b>Vermelho</b> ${wasd} · <kbd>Q</kbd><kbd>E</kbd> deslizar · <kbd>Espaço</kbd> pronto`
+        : `<b>Vermelho</b> ${wasd} · Shift fino`;
+      p2 = placing
+        ? `<b>Azul</b> ${arrows} · <kbd>,</kbd><kbd>.</kbd> deslizar · <kbd>Enter</kbd> pronto`
+        : `<b>Azul</b> ${arrows} · Shift dir. fino`;
+    }
+    const mouse = placing ? `${icon('mouse')} arraste o robô · roda gira<span class="sep"></span>` : '';
     this.hud.setHelp(`${mouse}${p1}<span class="sep"></span>${p2}<span class="sep"></span><kbd>C</kbd> câmera (${CAMERA_LABELS[this.view.cameraMode]}) · <kbd>F2</kbd> debug · <kbd>Esc</kbd> pausa`);
   }
 
@@ -131,7 +143,9 @@ export class Game {
       this.view.applySnapshot(s);
       // marca ao vivo onde o primeiro robô encostou fora (fica até o próximo posicionamento)
       const touch = this.firstTouch();
-      this.view.setEvidence(touch && (phase === 'deciding' || phase === 'point' || phase === 'over') ? touch.touch.point : null);
+      // depois do replay de evidência a marca não volta (o robô já está em outro lugar)
+      const live = (phase === 'deciding' || phase === 'point' || phase === 'over') && !this.evidenceReplayed;
+      this.view.setEvidence(touch && live ? touch.touch.point : null);
     }
     const focus = this.rp?.focus ?? {
       x: (s.robots[0].position.x + s.robots[1].position.x) / 2,
@@ -196,6 +210,7 @@ export class Game {
           this.view.showPlacementZones(e.phase === 'placement');
           if (e.phase !== 'placement') this.mouse?.cancel();
           if (e.phase === 'placement') {
+            this.evidenceReplayed = false;
             this.keys.clearPressed();
             this.updateHelp();
           }
@@ -208,7 +223,7 @@ export class Game {
           break;
         case 'bip':
           this.sfx.start();
-          this.hud.flash('NOKOTTA!', 'Hakke yoi, nokotta!', null, 0.9);
+          this.hud.flash('NOKOTTA!', 'Hakke yoi, nokotta!', null, 1.2, true);
           break;
         case 'roundStart':
           break;
@@ -254,6 +269,7 @@ export class Game {
   }
 
   private evidence: { who: number; touch: OutTouch } | null = null;
+  private evidenceReplayed = false;
   private rp: {
     t: number;
     start: number;
@@ -316,7 +332,10 @@ export class Game {
     rp.focus = { x: (f.pos[0].x + f.pos[1].x) / 2, z: (f.pos[0].z + f.pos[1].z) / 2 };
 
     // câmera: acompanha a luta e, perto do toque, aproxima rente ao chão no ponto
-    if (ev && rp.t >= ev.touch.t - 0.35) {
+    // depois da pausa no toque, a câmera volta a seguir a luta e a marca some
+    // (o robô continua caindo; a marca parada no chão parecia estar no lugar errado)
+    const afterHold = rp.held && rp.hold <= 0;
+    if (ev && rp.t >= ev.touch.t - 0.35 && !afterHold) {
       const p = ev.touch.point;
       const r = Math.hypot(p.x, p.z) || 1;
       const ox = p.x / r;
@@ -326,10 +345,14 @@ export class Game {
         look: { x: p.x - ox * 0.01, y: 0.006, z: p.z - oz * 0.01 },
       });
       if (rp.t >= ev.touch.t) this.view.setEvidence(p);
-    } else this.view.setCameraOverride(null);
+    } else {
+      this.view.setCameraOverride(null);
+      if (afterHold) this.view.setEvidence(null);
+    }
   }
 
   private endReplay() {
+    if (this.evidence) this.evidenceReplayed = true;
     this.rp = null;
     this.view.setCameraOverride(null);
     this.view.setDebug(this.opts.debug);

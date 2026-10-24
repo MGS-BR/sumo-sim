@@ -1,6 +1,7 @@
 import type { Referee } from '../sim/referee';
 import type { RobotSpec, SimSnapshot } from '../sim/types';
 import { GRAVITY } from '../sim/arena';
+import { icon } from './icons';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = '') => {
   const el = document.createElement(tag);
@@ -44,7 +45,7 @@ export class Hud {
       const dots = h('div', 'hud-dots');
       const kei = h('div', 'hud-kei');
       const status = h('div', 'hud-status');
-      const ready = h('button', 'hud-ready', 'Pronto') as HTMLButtonElement;
+      const ready = h('button', 'hud-ready', `${icon('check')} Pronto`) as HTMLButtonElement;
       ready.type = 'button';
       ready.hidden = true;
       ready.addEventListener('click', (e) => {
@@ -90,7 +91,10 @@ export class Hud {
   }
 
   /** Mensagem grande temporária (tempo real) */
-  flash(big: string, sub = '', team: number | null = null, seconds = 2) {
+  private flashCompact = false;
+  /** `compact` = texto pequeno no topo (não cobre os robôs durante a luta) */
+  flash(big: string, sub = '', team: number | null = null, seconds = 2, compact = false) {
+    this.flashCompact = compact;
     this.big.textContent = big;
     this.sub.textContent = sub;
     this.center.dataset.team = team === null ? '' : String(team);
@@ -118,7 +122,11 @@ export class Hud {
       t.dots.innerHTML = Array.from({ length: ref.rules.pointsToWin }, (_, k) => `<i class="${k < s.scores[i] ? 'on' : ''}"></i>`).join('') +
         (s.scores[i] > ref.rules.pointsToWin ? `<b>+${s.scores[i] - ref.rules.pointsToWin}</b>` : '');
       t.kei.textContent = s.keikoku[i] ? `Keikoku ×${s.keikoku[i]}` : '';
-      t.status.textContent = s.phase === 'placement' ? (s.ready[i] ? 'pronto ✓' : 'posicionando…') : '';
+      const status = s.phase === 'placement' ? (s.ready[i] ? 'ready' : 'placing') : '';
+      if (t.status.dataset.st !== status) {
+        t.status.dataset.st = status;
+        t.status.innerHTML = status === 'ready' ? `${icon('check')} pronto` : status === 'placing' ? 'posicionando…' : '';
+      }
       t.el.classList.toggle('ready', s.phase === 'placement' && s.ready[i]);
       t.ready.hidden = !(s.phase === 'placement' && !s.ready[i] && this.humans[i] && !replaying);
     }
@@ -132,7 +140,11 @@ export class Hud {
     // mensagens persistentes por fase (quando não há flash ativo)
     // no posicionamento o título fica pequeno no topo para não cobrir os robôs
     // compacto no posicionamento (não cobre os robôs) e no replay (não cobre o lance)
-    this.center.classList.toggle('compact', replaying || (s.phase === 'placement' && this.now > this.flashUntil));
+    const flashing = this.now <= this.flashUntil;
+    this.center.classList.toggle(
+      'compact',
+      replaying || (flashing && this.flashCompact) || (s.phase === 'placement' && !flashing),
+    );
     if (this.now > this.flashUntil) {
       this.center.dataset.team = '';
       this.center.classList.remove('pop');
@@ -159,7 +171,7 @@ export class Hud {
     if (s.count && s.phase === 'fight') {
       const who = s.count.who === null ? '' : ` — ${TEAM_NAMES[s.count.who]}`;
       const n = Math.min(3, Math.floor(s.count.value) + 1);
-      this.count.innerHTML = `<span>${COUNT_LABEL[s.count.kind]}${who}</span><b>${'●'.repeat(n)}${'○'.repeat(3 - n)}</b>`;
+      this.count.innerHTML = `<span>${COUNT_LABEL[s.count.kind]}${who}</span><b>${icon('dot').repeat(n)}${icon('ring').repeat(3 - n)}</b>`;
       this.count.dataset.team = s.count.who === null ? '' : String(s.count.who);
       this.count.hidden = false;
     } else this.count.hidden = true;

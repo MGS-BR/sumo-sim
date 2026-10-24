@@ -22,6 +22,14 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .ui { position: absolute; inset: 0; pointer-events: none; }
 .ui > * { pointer-events: auto; }
 button { font: inherit; color: inherit; cursor: pointer; }
+.ic { width: 1.05em; height: 1.05em; vertical-align: -0.17em; flex: none; }
+.ui button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+kbd .ic { width: .95em; height: .95em; vertical-align: -0.15em; }
+.chk i .ic { width: 15px; height: 15px; }
+.hud-count b { display: inline-flex; gap: 2px; }
+.hud-count b .ic { width: 14px; height: 14px; }
+.hud-status .ic, .hud-ready .ic { width: 13px; height: 13px; }
+.hud-ready { display: inline-flex; align-items: center; gap: 5px; }
 kbd { font-family: var(--mono); font-size: 0.75em; padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: rgba(255,255,255,0.06); margin: 0 1px; white-space: nowrap; }
 .t0 { color: var(--red); } .t1 { color: var(--blue); }
 .loading, .fatal { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
@@ -42,13 +50,16 @@ kbd { font-family: var(--mono); font-size: 0.75em; padding: 1px 6px; border: 1px
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .row > button { flex: 1; }
 
-.screen { position: absolute; inset: 0; padding: 28px; display: grid; }
+.screen { position: absolute; inset: 0; padding: 28px; display: grid; overflow-y: auto; overscroll-behavior: contain; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .panel.narrow { width: min(380px, 100%); display: grid; gap: 10px; text-align: center; }
 .desc { color: var(--muted); font-size: .86rem; line-height: 1.45; margin: 6px 0 0; }
 
 /* ---------- menu */
-.menu { grid-template-columns: 1fr minmax(320px, 430px); grid-template-rows: 1fr auto; gap: 24px; align-items: center; }
+.menu { grid-template-columns: minmax(0, 1fr) minmax(320px, 430px); grid-template-rows: 1fr auto; grid-template-areas: 'brand panel' 'keys panel'; gap: 18px 24px; align-items: end; }
+.menu .brand { grid-area: brand; }
+.menu .panel { grid-area: panel; align-self: center; }
+.menu .keys { grid-area: keys; max-width: 760px; }
 .brand { align-self: end; padding-bottom: 8vh; }
 .brand .mark { font-size: 1.1rem; letter-spacing: .5em; color: var(--red); font-weight: 800; }
 .brand h1 { margin: 6px 0 8px; font-size: clamp(3rem, 8vw, 6.5rem); line-height: .88; font-weight: 900; letter-spacing: -.035em; text-transform: uppercase; }
@@ -71,9 +82,18 @@ kbd { font-family: var(--mono); font-size: 0.75em; padding: 1px 6px; border: 1px
 .tog small { color: var(--muted); font-size: .78rem; }
 .vol { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; font-size: .92rem; font-weight: 600; padding: 2px 0; }
 .vol input { width: 100%; accent-color: var(--red); }
-.keys { grid-column: 1 / -1; display: flex; gap: 24px; flex-wrap: wrap; color: var(--muted); font-size: .85rem; }
-.touch-warn { display: none; color: var(--gold); }
-@media (hover: none) and (pointer: coarse) { .touch-warn { display: block; } }
+.keys { display: flex; gap: 8px 24px; flex-wrap: wrap; color: var(--ink); font-size: .85rem; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.keys > div { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.keys .solo { color: var(--muted); }
+@media (max-height: 760px) and (min-width: 901px) {
+  .menu { gap: 14px; }
+  .brand { padding-bottom: 2vh; }
+  .brand h1 { font-size: clamp(2.6rem, 6vw, 4.6rem); }
+  .menu .panel { gap: 12px; padding: 16px; }
+}
+.keys .touch-warn { display: none; color: var(--gold); }
+/* só em aparelhos que não têm mouse/trackpad algum */
+@media (any-pointer: coarse) and (not (any-pointer: fine)) { .keys .touch-warn { display: flex; } }
 
 /* ---------- seleção */
 .select { grid-template-columns: minmax(300px, 380px) 1fr minmax(300px, 380px); gap: 20px; align-items: start; }
@@ -213,6 +233,7 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
 @media (max-width: 900px) {
   .screen { padding: 14px; overflow: auto; }
   .menu, .select, .editor { grid-template-columns: 1fr; align-content: start; grid-auto-rows: max-content; grid-template-rows: none; }
+  .menu { grid-template-areas: 'brand' 'panel' 'keys'; }
   .pick, .ed-panel { max-height: none; overflow: visible; }
   .select .vs { align-self: auto; justify-self: stretch; }
   .ed-side { align-self: auto; }

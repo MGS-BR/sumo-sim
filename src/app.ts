@@ -11,6 +11,7 @@ import { loadRapier } from './sim/physics';
 import type { RobotSpec } from './sim/types';
 import { allRobots, isPreset, loadCustomRobots, loadSettings, newRobotId, saveCustomRobots, saveSettings } from './ui/storage';
 import { PRESETS } from './sim/presets';
+import { icon, kbdArrow } from './ui/icons';
 
 interface Settings {
   mode: GameMode;
@@ -74,7 +75,25 @@ export class App {
     if (!allRobots().some((r) => r.id === this.settings.p1)) this.settings.p1 = PRESETS[0].id;
     if (!allRobots().some((r) => r.id === this.settings.p2)) this.settings.p2 = PRESETS[1].id;
     window.addEventListener('keydown', (e) => this.onKey(e));
+    // som em todos os botões (inclusive os do HUD), com um único listener
+    root.addEventListener('click', (e) => this.uiSound(e), { capture: true });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t?.matches?.('input[type=checkbox]')) this.sfx.ui('toggle');
+      else if (t?.matches?.('.ed-panel input')) this.sfx.ui('tick');
+    });
     requestAnimationFrame((t) => this.loop(t));
+  }
+
+  private uiSound(e: Event) {
+    const b = (e.target as HTMLElement | null)?.closest?.('button');
+    if (!b || b.disabled) return;
+    const act = b.dataset.act ?? '';
+    if (b.classList.contains('danger') || act === 'del') this.sfx.ui('danger');
+    else if (b.classList.contains('primary') || b.classList.contains('hud-ready')) this.sfx.ui('confirm');
+    else if (b.classList.contains('ghost') || act === 'back' || act === 'cancel' || act === 'menu') this.sfx.ui('back');
+    else if (b.closest('.seg') || b.classList.contains('card') || b.dataset.view || act === 'spin') this.sfx.ui('toggle');
+    else this.sfx.ui('select');
   }
 
   async boot() {
@@ -167,11 +186,13 @@ export class App {
           ${tog('muted', 'Sem som', '')}
           <label class="vol"><span>Volume</span><input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-vol aria-label="Volume"></label>
         </div>
-        <button class="primary big" data-act="next">Escolher robôs <kbd>Enter</kbd></button>
+        <button class="primary big" data-act="next">Escolher robôs ${icon('right')} <kbd>Enter</kbd></button>
       </div>
       <footer class="keys">
         <div><b class="t0">Vermelho</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>Shift</kbd> fino · <kbd>Q</kbd><kbd>E</kbd> deslizar · <kbd>Espaço</kbd> pronto</div>
-        <div><b class="t1">Azul</b> <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> · <kbd>Shift dir.</kbd> fino · <kbd>,</kbd><kbd>.</kbd> deslizar · <kbd>Enter</kbd> pronto</div>
+        <div><b class="t1">Azul</b> ${kbdArrow('up', 'seta para cima')}${kbdArrow('left', 'seta para a esquerda')}${kbdArrow('down', 'seta para baixo')}${kbdArrow('right', 'seta para a direita')} · <kbd>Shift dir.</kbd> fino · <kbd>,</kbd><kbd>.</kbd> deslizar · <kbd>Enter</kbd> pronto</div>
+        <div class="solo">${icon('flag')} Contra o bot, use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ou as setas</div>
+        <div>${icon('mouse')} No posicionamento: arraste o robô e gire com a roda</div>
         <div class="touch-warn">Este simulador é controlado pelo teclado — use um computador.</div>
       </footer>`;
     this.ui.appendChild(scr);
@@ -189,7 +210,6 @@ export class App {
         if (!b) return;
         (s as unknown as Record<string, string>)[g.dataset.name!] = b.dataset.v!;
         g.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-        this.sfx.click();
         descMode();
         this.save();
       }),
@@ -242,7 +262,6 @@ export class App {
           if (slot === 0) s.p1 = b.dataset.id!;
           else s.p2 = b.dataset.id!;
           this.save();
-          this.sfx.click();
           this.showSelect();
         }),
       );
@@ -260,9 +279,9 @@ export class App {
     const mid = el('div', 'vs');
     mid.innerHTML = `<div class="vs-mark">VS</div>
       <div class="vs-info">${MODES[s.mode].label} · ${s.opponent === 'p2' ? '2 jogadores' : 'contra bot'}</div>
-      <button class="primary big" data-act="fight" ${ok ? '' : 'disabled'}>Lutar!</button>
+      <button class="primary big" data-act="fight" ${ok ? '' : 'disabled'}>${icon('play')} Lutar!</button>
       ${ok ? '' : '<p class="warn">Um dos robôs não passou na inspeção</p>'}
-      <button class="ghost" data-act="back">← Menu</button>`;
+      <button class="ghost" data-act="back">${icon('left')} Menu</button>`;
     scr.append(col(0), mid, col(1));
     this.ui.appendChild(scr);
     mid.querySelector('[data-act=fight]')!.addEventListener('click', () => this.startGame());
@@ -284,7 +303,7 @@ export class App {
       ['Tração máx.', `${fmt(d.maxTraction, 1)} N <small>(motores: ${fmt(d.motorForce)} N)</small>`],
     ];
     return `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
-      <div class="insp ${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓ Aprovado na inspeção' : '✗ Reprovado: ' + r.checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}</div>`;
+      <div class="insp ${r.ok ? 'ok' : 'bad'}">${r.ok ? icon('check') + ' Aprovado na inspeção' : icon('x') + ' Reprovado: ' + r.checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}</div>`;
   }
 
   // ---------------------------------------------------------------- editor
@@ -323,14 +342,14 @@ export class App {
           <span class="lbl">Câmera</span>
           <div class="ed-cam-row">
             <button data-view="perspectiva">3D</button><button data-view="frente">Frente</button><button data-view="lado">Lado</button><button data-view="cima">Cima</button>
-            <button data-act="spin" aria-pressed="false">Auto-girar</button>
+            <button data-act="spin" aria-pressed="false">${icon('spin')} Auto-girar</button>
           </div>
           <small>Arraste para girar · roda/pinça = zoom · botão direito = mover</small>
         </div>
         <div class="row">
-          <button class="primary" data-act="save">Salvar</button>
-          <button data-act="cancel">Cancelar</button>
-          ${isNew ? '' : '<button class="danger" data-act="del">Excluir</button>'}
+          <button class="primary" data-act="save">${icon('save')} Salvar</button>
+          <button data-act="cancel">${icon('x')} Cancelar</button>
+          ${isNew ? '' : `<button class="danger" data-act="del">${icon('trash')} Excluir</button>`}
         </div>
       </aside>`;
     this.ui.appendChild(scr);
@@ -352,7 +371,7 @@ export class App {
       syncRows();
       const r = inspect(spec);
       scr.querySelector('.ed-insp')!.innerHTML = r.checks
-        .map((c) => `<div class="chk ${c.ok ? 'ok' : 'bad'}"><i>${c.ok ? '✓' : '✗'}</i><b>${c.label}</b><span>${esc(c.detail)}</span></div>`)
+        .map((c) => `<div class="chk ${c.ok ? 'ok' : 'bad'}"><i>${icon(c.ok ? 'check' : 'x')}</i><b>${c.label}</b><span>${esc(c.detail)}</span></div>`)
         .join('');
       const d = r.derived;
       scr.querySelector('.ed-derived')!.innerHTML = `
@@ -457,10 +476,10 @@ export class App {
     const p = el('div', 'screen pause');
     p.innerHTML = `<div class="panel narrow">
       <h2>Pausa</h2>
-      <button class="primary" data-act="resume">Continuar <kbd>Esc</kbd></button>
-      <button data-act="restart">Reiniciar partida</button>
-      <button data-act="select">Trocar robôs</button>
-      <button data-act="menu">Menu</button>
+      <button class="primary" data-act="resume">${icon('play')} Continuar <kbd>Esc</kbd></button>
+      <button data-act="restart">${icon('refresh')} Reiniciar partida</button>
+      <button data-act="select">${icon('swap')} Trocar robôs</button>
+      <button data-act="menu">${icon('home')} Menu</button>
       <p class="desc">A física fica congelada durante a pausa.</p></div>`;
     this.ui.appendChild(p);
     this.pauseEl = p;
@@ -491,9 +510,9 @@ export class App {
       <h2 class="res-winner">${winner === null ? 'Hikiwake' : `${TEAM[winner]} · ${esc(specs[winner].name)}`}</h2>
       <div class="res-score"><span class="t0">${sc[0]}</span><i>×</i><span class="t1">${sc[1]}</span></div>
       <p class="desc">${esc(reason)}</p>
-      <button class="primary" data-act="again">Revanche <kbd>Enter</kbd></button>
-      <button data-act="select">Trocar robôs</button>
-      <button data-act="menu">Menu</button></div>`;
+      <button class="primary" data-act="again">${icon('refresh')} Revanche <kbd>Enter</kbd></button>
+      <button data-act="select">${icon('swap')} Trocar robôs</button>
+      <button data-act="menu">${icon('home')} Menu</button></div>`;
     this.ui.appendChild(r);
     r.querySelector('[data-act=again]')!.addEventListener('click', () => this.startGame());
     r.querySelector('[data-act=select]')!.addEventListener('click', () => this.showSelect());

@@ -45,6 +45,13 @@ export const KEY_LABELS: Record<string, string> = {
   Comma: ',', Period: '.', Delete: 'Delete', PageDown: 'PgDn', Enter: 'Enter', NumpadEnter: 'Enter',
 };
 
+/** Contra o bot, o jogador pode usar WASD ou as setas (e os atalhos dos dois lados) */
+export function mergedKeyMap(a: KeyMap, b: KeyMap): KeyMap {
+  const out = {} as KeyMap;
+  for (const k of Object.keys(a) as (keyof KeyMap)[]) out[k] = [...new Set([...a[k], ...b[k]])];
+  return out;
+}
+
 const GAME_CODES = new Set(KEYMAPS.flatMap((m) => Object.values(m).flat()));
 
 /** Estado global de teclas (um listener para os dois jogadores) */

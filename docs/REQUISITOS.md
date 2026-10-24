@@ -23,7 +23,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF01 | Dohyo de 77 cm × 2,5 cm, tawara de 2,5 cm (conta como dentro), shikiri-sen 1 × 10 cm a 5 cm do centro, yochi 180 × 180 cm | ✅ |
 | RF02 | Robôs em escala real: até 100 × 100 mm, altura livre, até 500 g | ✅ |
 | RF03 | Física 3D: tração limitada por μ·N em cada roda; rampa da lâmina reduz a carga nas rodas do rival | ✅ |
-| RF04 | Controle por teclado, P1 (WASD) e P2 (setas), com ajuste fino (Shift) e rampa de aceleração (simula PWM) | ✅ |
+| RF04 | Controle por teclado, P1 (WASD) e P2 (setas), com ajuste fino (Shift) e rampa de aceleração (simula PWM). Contra o bot, WASD e setas controlam o mesmo robô | ✅ |
 | RF05 | Fase de posicionamento (shikiri) com validação do Art. 10, pelo teclado ou arrastando com o mouse (roda gira; toque também funciona) | ✅ |
 | RF06 | Juiz automático: rounds, Yuko, Shinitai, Torinaoshi, Hansoku, Keikoku, Yusei, prorrogação | ✅ |
 | RF07 | HUD: placar de Yuko, Keikoku, round, relógio, contagem do juiz (1-2-3), mensagens | ✅ |
@@ -31,6 +31,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF09 | Editor de robô: dimensões, lâmina (ângulo, comprimento, largura, altura ligada, aresta), rodas, motor, massa e CG; inspeção ao vivo; câmera controlada pelo mouse com vistas prontas; salvo no navegador | ✅ |
 | RF10 | Câmeras: transmissão, de cima, rente ao dohyo, livre (mouse) | ✅ |
 | RF11 | Replay em câmera lenta do lance do Yuko. Quando o ponto é por tocar fora, o replay congela no instante do toque, aproxima a câmera rente ao chão e marca o ponto | ✅ |
+| RF18 | Ícone da página (dohyo), ícones SVG próprios na interface (sem emojis) e som em todos os botões, por tipo (confirmar, voltar, perigo, seleção) | ✅ |
 | RF17 | Sons: motor de cada robô (tom pela rotação, volume pela corrente), raspagem no contato, batida proporcional ao impacto, chiado de pneu patinando; volume ajustável | ✅ |
 | RF12 | Modo debug: carga e tração por roda, patinação, CG, % do peso nas rodas | ✅ |
 | RF13 | Bot de treino (fácil/médio/difícil) | ✅ |
@@ -104,6 +105,8 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | Pronto | Espaço | Enter |
 
 Mouse no posicionamento: arraste o robô para mover, use a roda para girar (7,5° por clique, 1° com Shift) e o botão **Pronto** no painel do jogador.
+
+Contra o bot: **WASD ou setas** (e Espaço ou Enter para pronto).
 
 Gerais: **C** câmera · **F2** debug · **Esc** pausa · qualquer tecla pula o replay.
 
