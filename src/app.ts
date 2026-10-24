@@ -18,6 +18,7 @@ interface Settings {
   opponent: Opponent;
   noCombatRule: boolean;
   replay: boolean;
+  randomPlacement: boolean;
   debug: boolean;
   muted: boolean;
   volume: number;
@@ -30,6 +31,7 @@ const DEFAULTS: Settings = {
   opponent: 'bot-medio',
   noCombatRule: true,
   replay: true,
+  randomPlacement: false,
   debug: false,
   muted: false,
   volume: 0.8,
@@ -182,6 +184,7 @@ export class App {
         <div class="field"><span class="lbl">Opções</span>
           ${tog('noCombatRule', 'Hansoku por falta de combate', 'Art. 17: os dois se movendo sem contato por 3 s')}
           ${tog('replay', 'Replay do ponto', 'Câmera lenta a cada Yuko')}
+          ${tog('randomPlacement', 'Posicionamento aleatório', 'Sorteia posição e giro dos dois robôs a cada round')}
           ${tog('debug', 'Ver forças (debug)', 'Carga e tração em cada roda · F2 na luta')}
           ${tog('muted', 'Sem som', '')}
           <label class="vol"><span>Volume</span><input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-vol aria-label="Volume"></label>
@@ -481,6 +484,7 @@ export class App {
       rules: { noCombatRule: s.noCombatRule },
       replay: s.replay,
       debug: s.debug,
+      randomPlacement: s.randomPlacement,
     });
     this.game = g;
     g.onEnd = (w, reason) => this.showResult(w, reason);

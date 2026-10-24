@@ -24,6 +24,8 @@ export class Hud {
   private humans: [boolean, boolean] = [true, true];
   /** Clique no botão "Pronto" de um lado */
   onReady: (i: number) => void = () => {};
+  /** posições sorteadas: troca os textos de "posicionar" por "confirmar" */
+  drawnPlacement = false;
   private round = h('div', 'hud-round');
   private time = h('div', 'hud-time');
   private big = h('div', 'hud-big');
@@ -122,10 +124,11 @@ export class Hud {
       t.dots.innerHTML = Array.from({ length: ref.rules.pointsToWin }, (_, k) => `<i class="${k < s.scores[i] ? 'on' : ''}"></i>`).join('') +
         (s.scores[i] > ref.rules.pointsToWin ? `<b>+${s.scores[i] - ref.rules.pointsToWin}</b>` : '');
       t.kei.textContent = s.keikoku[i] ? `Keikoku ×${s.keikoku[i]}` : '';
-      const status = s.phase === 'placement' ? (s.ready[i] ? 'ready' : 'placing') : '';
+      const status = s.phase === 'placement' ? (s.ready[i] ? 'ready' : this.drawnPlacement ? 'drawn' : 'placing') : '';
       if (t.status.dataset.st !== status) {
         t.status.dataset.st = status;
-        t.status.innerHTML = status === 'ready' ? `${icon('check')} pronto` : status === 'placing' ? 'posicionando…' : '';
+        t.status.innerHTML =
+          status === 'ready' ? `${icon('check')} pronto` : status === 'placing' ? 'posicionando…' : status === 'drawn' ? 'confirmando…' : '';
       }
       t.el.classList.toggle('ready', s.phase === 'placement' && s.ready[i]);
       t.ready.hidden = !(s.phase === 'placement' && !s.ready[i] && this.humans[i] && !replaying);
@@ -153,7 +156,10 @@ export class Hud {
         this.sub.textContent = 'câmera lenta · qualquer tecla para pular';
       } else if (s.phase === 'placement') {
         this.big.textContent = 'SHIKIRI';
-        this.sub.textContent = `Posicionem os robôs atrás da linha · ${Math.max(0, Math.ceil(ref.rules.placementTime - s.phaseTime))} s`;
+        const secs = Math.max(0, Math.ceil(ref.rules.placementTime - s.phaseTime));
+        this.sub.textContent = this.drawnPlacement
+          ? `Posições sorteadas · confirmem Pronto · ${secs} s`
+          : `Posicionem os robôs atrás da linha · ${secs} s`;
       } else if (s.phase === 'countdown') {
         const n = Math.ceil(ref.rules.countdownTime - s.phaseTime);
         this.big.textContent = n > 0 ? String(n) : '';

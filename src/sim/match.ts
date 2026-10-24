@@ -1,6 +1,7 @@
 import { SumoWorld, loadRapier } from './physics';
 import { Referee, type RefEvent, type RefFacts, type RobotFact, type RulesConfig } from './referee';
-import { constrainPlacement, defaultPlacement, nudgePlacement } from './placement';
+import { constrainPlacement, defaultPlacement, nudgePlacement, randomPlacement } from './placement';
+import { Rng, normalizeSeed } from './rng';
 import { PHYSICS_DT } from './modes';
 import type { ModeConfig } from './modes';
 import { wrapAngle } from './math';
@@ -17,6 +18,13 @@ export interface MatchOptions {
   specs: [RobotSpec, RobotSpec];
   mode: ModeConfig;
   rules?: Partial<RulesConfig>;
+  /**
+   * Sorteia posição e giro dos dois robôs a cada round (inclusive o bot) e trava os
+   * ajustes: os jogadores só confirmam "Pronto".
+   */
+  randomPlacement?: boolean;
+  /** Semente do sorteio. Mesma semente = mesmas posições (replay/online). */
+  seed?: number;
 }
 
 const REPLAY_SECONDS = 4;
@@ -44,6 +52,9 @@ export class Match {
   readonly ref: Referee;
   readonly specs: [RobotSpec, RobotSpec];
   readonly mode: ModeConfig;
+  readonly randomPlacement: boolean;
+  readonly seed: number;
+  private rng: Rng;
   placements: [Pose2D, Pose2D];
   private startPoses: [Pose2D, Pose2D];
   private prevPose: [Pose2D, Pose2D];
@@ -67,11 +78,21 @@ export class Match {
     this.specs = opts.specs;
     this.mode = opts.mode;
     this.ref = new Referee({ falseStartRule: opts.mode.falseStartRule, ...opts.rules });
-    this.placements = [defaultPlacement(opts.specs[0], 0), defaultPlacement(opts.specs[1], 1)];
+    this.randomPlacement = opts.randomPlacement === true;
+    this.seed = normalizeSeed(opts.seed ?? 1);
+    this.rng = new Rng(this.seed);
+    this.placements = this.randomPlacement
+      ? this.drawPlacements()
+      : [defaultPlacement(opts.specs[0], 0), defaultPlacement(opts.specs[1], 1)];
     this.startPoses = [{ ...this.placements[0] }, { ...this.placements[1] }];
     this.prevPose = [{ ...this.placements[0] }, { ...this.placements[1] }];
     this.applyPlacements();
     this.lastSnapshot = sim.snapshot();
+  }
+
+  /** Vermelho sorteia primeiro, depois o azul: a ordem faz parte do determinismo. */
+  private drawPlacements(): [Pose2D, Pose2D] {
+    return [randomPlacement(this.specs[0], 0, this.rng), randomPlacement(this.specs[1], 1, this.rng)];
   }
 
   private applyPlacements() {
@@ -94,7 +115,7 @@ export class Match {
       for (const i of [0, 1]) {
         const f = frames[i];
         if (f.ready) this.ready[i] = true;
-        if (!this.ready[i]) {
+        if (!this.ready[i] && !this.randomPlacement) {
           if (f.placeTarget) this.placements[i] = constrainPlacement(this.specs[i], f.placeTarget, i) ?? this.placements[i];
           else this.placements[i] = nudgePlacement(this.specs[i], this.placements[i], i, sanitizePlace(f.place), dt);
         }
@@ -129,6 +150,7 @@ export class Match {
     if (e.type !== 'phase') return;
     if (e.phase === 'placement') {
       this.ready = [false, false];
+      if (this.randomPlacement) this.placements = this.drawPlacements();
       this.applyPlacements();
     } else if (e.phase === 'countdown') {
       this.startPoses = [{ ...this.placements[0] }, { ...this.placements[1] }];

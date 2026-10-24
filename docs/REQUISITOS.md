@@ -32,7 +32,8 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF10 | Câmeras: transmissão, de cima, rente ao dohyo, livre (mouse) | ✅ |
 | RF11 | Replay em câmera lenta do lance do Yuko. Quando o ponto é por tocar fora, o replay congela no instante do toque, aproxima a câmera rente ao chão e marca o ponto | ✅ |
 | RF19 | Rodas embutidas na chassi: laterais em largura total com caixas de roda em arco e folga ajustável (padrão 2 mm). Opção de rodas por fora no editor. A física usa fatias convexas da mesma forma (erro < 0,6 mm) | ✅ |
-| RF18 | Ícone da página (dohyo), ícones SVG próprios na interface (sem emojis) e som em todos os botões, por tipo (confirmar, voltar, perigo, seleção) | ✅ |
+| RF18 | Ícone da página (dohyo) em SVG, `.ico` (16/32/48 px), PNG 32 px, ícone de toque da Apple e manifesto com 192/512 px. O build de arquivo único embute os ícones. Ícones SVG próprios na interface (sem emojis) e som em todos os botões, por tipo (confirmar, voltar, perigo, seleção) | ✅ |
+| RF20 | Posicionamento aleatório (opção no menu, desligada por padrão): vale para Realista e Arcade, 2 jogadores e bot. A cada round sorteia giro (0–360°), lateral e distância de cada robô, sempre dentro do Art. 10 e a pelo menos 1 cm do degrau. Os ajustes ficam travados; cada lado só confirma **Pronto**, e o limite de 30 s continua valendo | ✅ |
 | RF17 | Sons: motor de cada robô (tom pela rotação, volume pela corrente) e batida proporcional ao impacto quando os robôs se encostam; volume ajustável. Sem ruído contínuo de atrito/raspagem (removido a pedido) | ✅ |
 | RF12 | Modo debug: carga e tração por roda, patinação, CG, % do peso nas rodas | ✅ |
 | RF13 | Bot de treino (fácil/médio/difícil) | ✅ |
@@ -48,6 +49,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RNF02 | Determinismo (base do online) | Rapier `deterministic-compat`; entrada só por `ControlFrame` por tick; teste automatizado confirma |
 | RNF03 | Simulação sem DOM | `src/sim/` roda no navegador e no Node (testes) |
 | RNF04 | Geometria única | A mesma spec gera colisores e malhas 3D |
+| RNF06 | Sorteio reproduzível | Gerador com semente (mulberry32) dentro de `src/sim`. A partida recebe a semente, e a mesma semente gera as mesmas posições em todos os rounds. Para o online, basta transmitir a semente. Teste automatizado confirma |
 | RNF05 | Desempenho | 10 s de luta simulam em ~0,4 s no Node (~25× tempo real). `?gfx=low` desliga sombras/antialias |
 
 ## 4. Modelo físico
@@ -109,6 +111,8 @@ Mouse no posicionamento: arraste o robô para mover, use a roda para girar (7,5�
 
 Contra o bot: **WASD ou setas** (e Espaço ou Enter para pronto).
 
+Com **posicionamento aleatório** ligado, teclado e mouse não movem o robô no shikiri; só o Pronto funciona.
+
 Gerais: **C** câmera · **F2** debug · **Esc** pausa · qualquer tecla pula o replay.
 
 ## 7. Arquitetura
@@ -122,7 +126,8 @@ src/
     drive.ts        motor DC + pneu (μ·N)
     physics.ts      SumoWorld: Rapier, rodas por raycast, detecção de saída
     referee.ts      Juiz: máquina de estados pura
-    placement.ts    Art. 10
+    placement.ts    Art. 10 + sorteio de pose legal
+    rng.ts          gerador pseudoaleatório com semente
     match.ts        física + juiz + posicionamento por tick
     inspection.ts   caixa de inspeção + parâmetros do editor
     presets.ts      Kunai, Bloco, Trator
@@ -133,6 +138,30 @@ src/
   app.ts          telas: menu, seleção, editor, pausa, resultado
 tests/            vitest (física, juiz, partidas bot × bot, determinismo)
 ```
+
+## 7.1 Posicionamento aleatório — como funciona e análise
+
+**Sorteio de cada robô, por round:**
+1. Giro uniforme em 0–360°. O robô pode largar de lado ou de costas para o rival.
+2. Posição lateral tal que alguma parte do retângulo do robô ainda cruze a faixa da shikiri-sen (|z| ≤ 5 cm).
+3. Distância uniforme entre a linha marrom e a borda do dohyo, com todos os cantos a pelo menos 1 cm do degrau.
+4. A pose passa por `placementIssue` (a mesma checagem do modo manual). Se for reprovada, sorteia de novo (até 64 vezes). Se nada servir, o que só acontece com um robô impossível de grande, usa a pose padrão com o giro sorteado.
+
+**Ordem e semente:** o vermelho sorteia antes do azul, e a ordem faz parte do determinismo. A semente sai do gerador criptográfico do navegador no início da partida.
+
+**Por que travar os ajustes:** se desse para mover depois do sorteio, cada jogador voltaria para a posição ideal e a opção não mudaria nada. O bot também sorteia, e não move a própria pose.
+
+**Medições:**
+- **Regras:** 3 presets × 2 lados × 400 sorteios saíram sempre legais pela regra do jogo. No navegador, uma checagem independente reimplementa o Art. 10.
+- **Tamanhos:** 100 × 100, 60 × 60 e 100 × 60 mm também saíram sempre legais.
+- **Variedade:** em 600 sorteios do Trator, o giro caiu nos 4 quadrantes, a lateral variou além de ±6 cm e a distância variou mais de 15 cm. Praticamente nenhuma pose se repetiu.
+- **Lado de largada (bot difícil × bot difícil, 30 sementes):**
+  - Trator × Trator: vermelho 16, azul 14;
+  - Kunai × Kunai: vermelho 17, azul 13;
+  - Trator × Kunai: vermelho 22, azul 8. Aqui a vantagem é do Trator, não do lado.
+
+  Não houve viés de lado além do ruído de 30 partidas.
+- **Ritmo:** cerca de metade das largadas é de costas para o rival, e o 1º contato acontece em ~0,4 s, como na largada padrão. O sorteio muda a estratégia, não o ritmo.
 
 ## 8. Roadmap
 

@@ -1,5 +1,6 @@
 import { ARENA, SHIKIRI_HALF_LEN, SHIKIRI_OUTER_X } from './arena';
 import type { Pose2D, RobotSpec } from './types';
+import type { Rng } from './rng';
 
 /**
  * Posicionamento — Art. 10:
@@ -90,6 +91,46 @@ export function constrainPlacement(spec: RobotSpec, desired: Pose2D, player: num
     if (!placementIssue(spec, p, player)) return p;
   }
   return null;
+}
+
+/** No sorteio, nenhum canto fica a menos disso do degrau (evita largar já "pendurado"). */
+export const RANDOM_EDGE_MARGIN = 0.01;
+const RANDOM_TRIES = 64;
+
+/**
+ * Sorteia uma pose legal (Art. 10) para o jogador: giro livre (0–360°), posição
+ * lateral livre desde que alguma parte toque a faixa da shikiri-sen e distância
+ * livre atrás da linha até a borda do dohyo (com RANDOM_EDGE_MARGIN).
+ * Determinístico para o mesmo estado do Rng.
+ */
+export function randomPlacement(spec: RobotSpec, player: number, rng: Rng): Pose2D {
+  const sign = sideSign(player);
+  const hl = spec.length / 2;
+  const hw = spec.width / 2;
+  const limitR = ARENA.dohyoRadius - Math.max(DOHYO_MARGIN, RANDOM_EDGE_MARGIN);
+  let yaw = 0;
+  for (let k = 0; k < RANDOM_TRIES; k++) {
+    yaw = rng.range(-Math.PI, Math.PI);
+    const c = Math.abs(Math.cos(yaw));
+    const s = Math.abs(Math.sin(yaw));
+    const ex = hl * c + hw * s; // meia-extensão do retângulo em x
+    const ez = hl * s + hw * c; // e em z
+    // centro em z tal que o retângulo ainda cruza a faixa |z| ≤ SHIKIRI_HALF_LEN
+    const zSpan = SHIKIRI_HALF_LEN + ez * 0.98;
+    const z = rng.range(-zSpan, zSpan);
+    const xMin = PLACEMENT_LINE_X + ex + 1e-6;
+    const zFar = Math.abs(z) + ez;
+    if (zFar >= limitR) continue;
+    const xMax = Math.sqrt(limitR * limitR - zFar * zFar) - ex;
+    const u = rng.next();
+    if (xMax <= xMin) continue;
+    const pose: Pose2D = { x: sign * (xMin + (xMax - xMin) * u), z, yaw };
+    if (!placementIssue(spec, pose, player) && footprint(spec, pose).every(([x, zz]) => Math.hypot(x, zz) <= limitR + 1e-9))
+      return pose;
+  }
+  // robô grande demais para quase todos os giros: mantém o último giro sorteado no ponto padrão
+  const base = defaultPlacement(spec, player);
+  return constrainPlacement(spec, { ...base, yaw }, player) ?? base;
 }
 
 /** Move a pose segundo um comando relativo ao robô (teclado). */

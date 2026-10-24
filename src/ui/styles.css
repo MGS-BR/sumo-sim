@@ -253,8 +253,21 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
   .hud-top { left: 8px; right: 8px; gap: 6px; }
   .hud-team { min-width: 0; }
   .hud-round { white-space: nowrap; font-size: .56rem; letter-spacing: .08em; }
-  .hud-center.compact { top: 104px; }
-  .hud-toasts { top: 104px; right: 8px; left: 8px; justify-items: stretch; }
+  .hud-center.compact { top: 112px; }
+  /* embaixo no celular (a ajuda do teclado some): não cobre o título compacto do topo */
+  .hud-toasts { top: auto; bottom: 12px; right: 8px; left: 8px; justify-items: stretch; }
   .hud-clock { min-width: 0; padding: 6px 10px; }
+  /* nome + marcadores de ponto cabem na caixa mesmo em 320 px (antes o 2º círculo vazava sob o relógio) */
+  .hud-team { grid-template-columns: minmax(0, 1fr) auto; column-gap: 6px; }
+  .hud-team-name { min-width: 0; font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hud-dots { gap: 4px; }
+  .hud-dots i { width: 12px; height: 12px; }
+}
+@media (max-width: 420px) {
+  /* tela estreita: marcadores de ponto descem para baixo do nome em vez de cortá-lo */
+  .hud-team { grid-template-columns: minmax(0, 1fr); }
+  .hud-dots { grid-column: 1; grid-row: auto; }
+  .hud-center.compact { top: 124px; }
+  .hud-sub { padding: 0 12px; white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) { .hud-center.pop .hud-big { animation: none; } }

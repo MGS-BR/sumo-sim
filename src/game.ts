@@ -7,6 +7,7 @@ import type { Controller } from './control/controller';
 import { KeyboardController, KEYMAPS, KeyboardState, mergedKeyMap } from './control/keyboard';
 import { SparringBot, type BotLevel } from './control/sparringBot';
 import { MousePlacement } from './control/mousePlacement';
+import { randomSeed } from './sim/rng';
 import type { ArenaView } from './render/arenaView';
 import { CAMERA_LABELS } from './render/arenaView';
 import { icon, kbdArrow } from './ui/icons';
@@ -22,6 +23,8 @@ export interface GameOptions {
   rules: Partial<RulesConfig>;
   replay: boolean;
   debug: boolean;
+  /** sorteia a posição dos dois robôs a cada round (jogadores e bot) */
+  randomPlacement: boolean;
 }
 
 const TEAM = ['Vermelho', 'Azul'];
@@ -52,7 +55,13 @@ export class Game {
 
   async start() {
     const o = this.opts;
-    this.match = await Match.create({ specs: o.specs, mode: o.mode, rules: o.rules });
+    this.match = await Match.create({
+      specs: o.specs,
+      mode: o.mode,
+      rules: o.rules,
+      randomPlacement: o.randomPlacement,
+      seed: randomSeed(),
+    });
     const vsBot = o.opponent !== 'p2';
     // sozinho contra o bot: WASD e setas controlam o mesmo robô
     const p1 = new KeyboardController(this.keys, vsBot ? mergedKeyMap(KEYMAPS[0], KEYMAPS[1]) : KEYMAPS[0], o.mode, 'Jogador 1');
@@ -61,7 +70,7 @@ export class Game {
     this.controllers = [p1, p2];
     this.mouse = new MousePlacement(this.view, {
       active: () => this.match.ref.s.phase === 'placement' && !this.paused && !this.replaying,
-      canEdit: (i) => this.controllers[i].kind === 'keyboard' && !this.match.ref.s.ready[i],
+      canEdit: (i) => this.controllers[i].kind === 'keyboard' && !this.match.ref.s.ready[i] && !this.match.randomPlacement,
       pose: (i) => this.match.placements[i],
     });
     this.hud.onReady = (i) => this.mouse?.requestReady(i);
@@ -71,12 +80,13 @@ export class Game {
     this.view.showPlacementZones(true);
     this.view.applySnapshot(this.match.lastSnapshot);
     this.view.snapCamera();
+    this.hud.drawnPlacement = this.match.randomPlacement;
     this.hud.setup(o.specs, [p1.label, p2.label], [true, p2.kind === 'keyboard']);
     this.hud.setDebug(o.debug);
     this.hud.show();
     this.keys.clearPressed();
     this.updateHelp();
-    this.hud.toast(`Round 1 · modo ${o.mode.label}`);
+    this.hud.toast(`Round 1 · modo ${o.mode.label}${o.randomPlacement ? ' · posições sorteadas' : ''}`);
   }
 
   private updateHelp() {
@@ -84,9 +94,14 @@ export class Game {
     const placing = this.match.ref.s.phase === 'placement';
     const arrows = `${kbdArrow('up', 'cima')}${kbdArrow('left', 'esquerda')}${kbdArrow('down', 'baixo')}${kbdArrow('right', 'direita')}`;
     const wasd = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>';
+    const drawn = placing && this.match.randomPlacement;
     let p1: string;
     let p2: string;
-    if (bot) {
+    if (drawn) {
+      // posições sorteadas: não há o que ajustar, só confirmar
+      p1 = bot ? `<b>Você</b> posição sorteada · <kbd>Espaço</kbd> pronto` : `<b>Vermelho</b> posição sorteada · <kbd>Espaço</kbd> pronto`;
+      p2 = bot ? '<b>Azul</b> bot · posição sorteada' : `<b>Azul</b> posição sorteada · <kbd>Enter</kbd> pronto`;
+    } else if (bot) {
       p1 = placing
         ? `<b>Você</b> ${wasd} ou ${arrows} posicionar · <kbd>Q</kbd><kbd>E</kbd> deslizar · <kbd>Espaço</kbd> pronto`
         : `<b>Você</b> ${wasd} ou ${arrows} · Shift ajuste fino`;
@@ -99,7 +114,7 @@ export class Game {
         ? `<b>Azul</b> ${arrows} · <kbd>,</kbd><kbd>.</kbd> deslizar · <kbd>Enter</kbd> pronto`
         : `<b>Azul</b> ${arrows} · Shift dir. fino`;
     }
-    const mouse = placing ? `${icon('mouse')} arraste o robô · roda gira<span class="sep"></span>` : '';
+    const mouse = placing && !drawn ? `${icon('mouse')} arraste o robô · roda gira<span class="sep"></span>` : '';
     this.hud.setHelp(`${mouse}${p1}<span class="sep"></span>${p2}<span class="sep"></span><kbd>C</kbd> câmera (${CAMERA_LABELS[this.view.cameraMode]}) · <kbd>F2</kbd> debug · <kbd>Esc</kbd> pausa`);
   }
 
