@@ -46,6 +46,8 @@ export function normalizeSpec(raw: unknown): RobotSpec | null {
       radius: num(w.radius, base.wheels.radius, 0.005, 0.04),
       width: num(w.width, base.wheels.width, 0.003, 0.04),
       friction: num(w.friction, base.wheels.friction, 0.1, 2),
+      covered: typeof w.covered === 'boolean' ? w.covered : true,
+      wellGap: num(w.wellGap, 0.002, 0.0005, 0.01),
     },
     motor: {
       freeRpm: num(m.freeRpm, base.motor.freeRpm, 10, 5000),

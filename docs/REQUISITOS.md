@@ -31,6 +31,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF09 | Editor de robô: dimensões, lâmina (ângulo, comprimento, largura, altura ligada, aresta), rodas, motor, massa e CG; inspeção ao vivo; câmera controlada pelo mouse com vistas prontas; salvo no navegador | ✅ |
 | RF10 | Câmeras: transmissão, de cima, rente ao dohyo, livre (mouse) | ✅ |
 | RF11 | Replay em câmera lenta do lance do Yuko. Quando o ponto é por tocar fora, o replay congela no instante do toque, aproxima a câmera rente ao chão e marca o ponto | ✅ |
+| RF19 | Rodas embutidas na chassi: laterais em largura total com caixas de roda em arco e folga ajustável (padrão 2 mm). Opção de rodas por fora no editor. A física usa fatias convexas da mesma forma (erro < 0,6 mm) | ✅ |
 | RF18 | Ícone da página (dohyo), ícones SVG próprios na interface (sem emojis) e som em todos os botões, por tipo (confirmar, voltar, perigo, seleção) | ✅ |
 | RF17 | Sons: motor de cada robô (tom pela rotação, volume pela corrente), raspagem no contato, batida proporcional ao impacto, chiado de pneu patinando; volume ajustável | ✅ |
 | RF12 | Modo debug: carga e tração por roda, patinação, CG, % do peso nas rodas | ✅ |

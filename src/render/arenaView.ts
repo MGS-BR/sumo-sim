@@ -399,11 +399,11 @@ export class ArenaView {
     return this.controls.autoRotate;
   }
   /** Vistas prontas do editor */
-  inspectView(v: 'perspectiva' | 'frente' | 'lado' | 'cima') {
+  inspectView(v: 'perspectiva' | 'frente' | 'lado' | 'tras' | 'cima') {
     const H = ARENA.dohyoHeight + 0.02;
     const k = this.camera.aspect < 1 ? 1.9 : 1; // retrato (celular): afasta para caber
-    const raw = { perspectiva: [0.2, 0.13, 0.22], frente: [0.3, H + 0.005, 0], lado: [0, H + 0.005, 0.3], cima: [0, 0.32, 0.0001] }[v];
-    const pos = v === 'frente' || v === 'lado' ? [raw[0] * k, raw[1], raw[2] * k] : raw.map((c) => c * k);
+    const raw = { perspectiva: [0.2, 0.13, 0.22], frente: [0.3, H + 0.005, 0], lado: [0, H + 0.005, 0.3], tras: [-0.3, H + 0.005, 0], cima: [0, 0.32, 0.0001] }[v];
+    const pos = v === 'frente' || v === 'lado' || v === 'tras' ? [raw[0] * k, raw[1], raw[2] * k] : raw.map((c) => c * k);
     this.controls.target.set(0, H, 0);
     this.camera.position.set(pos[0], pos[1], pos[2]);
     this.camera.lookAt(this.controls.target);

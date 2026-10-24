@@ -138,6 +138,8 @@ export class SumoWorld {
     };
     colliders.push(hull(geom.bodyHull, spec.bodyFriction));
     colliders.push(hull(geom.bladeHull, spec.blade.friction));
+    // laterais que envolvem as rodas (fatias convexas da mesma forma desenhada)
+    for (const h of geom.shell?.hulls ?? []) colliders.push(hull(h, spec.bodyFriction));
     // Rodas: só colidem com o OUTRO robô. O contato com o chão é do modelo de pneu (raycast).
     const s45 = Math.SQRT1_2;
     for (const w of geom.wheels) {
@@ -368,12 +370,14 @@ export class SumoWorld {
     const q = b.rotation();
     const lv = b.linvel();
     const av = b.angvel();
-    // Basta QUALQUER parte do robô encostar no chão de fora (Art. 13): chassi, lâmina, roda
+    // Basta QUALQUER parte do robô encostar no chão de fora (Art. 13): chassi, lâmina, roda.
+    // Só percorre os pares que a física já detectou com o chão (barato mesmo com muitos colisores).
     let outsidePoint: Vec3 | null = null;
-    for (const col of r.colliders) {
-      outsidePoint = this.touchPoint(col, this.ground);
-      if (outsidePoint) break;
-    }
+    const bh = b.handle;
+    this.world.contactPairsWith(this.ground, (other) => {
+      if (outsidePoint || other.parent()?.handle !== bh) return;
+      outsidePoint = this.touchPoint(other, this.ground);
+    });
     let loadSum = 0;
     for (const w of r.wheels) {
       loadSum += w.state.load;
@@ -399,11 +403,15 @@ export class SumoWorld {
   /** Ponto de contato entre os dois robôs, ou null */
   robotsContactPoint(): Vec3 | null {
     const [a, b] = this.robots;
-    for (const ca of a.colliders)
-      for (const cb of b.colliders) {
-        const p = this.touchPoint(ca, cb);
-        if (p) return p;
-      }
+    const bh = b.body.handle;
+    let p: Vec3 | null = null;
+    for (const ca of a.colliders) {
+      this.world.contactPairsWith(ca, (other) => {
+        if (p || other.parent()?.handle !== bh) return;
+        p = this.touchPoint(ca, other);
+      });
+      if (p) return p;
+    }
     return null;
   }
 

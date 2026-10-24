@@ -21,6 +21,8 @@ export interface InspectionCheck {
   label: string;
   ok: boolean;
   detail: string;
+  /** aviso informativo: não reprova */
+  note?: boolean;
 }
 
 export interface InspectionResult {
@@ -57,6 +59,7 @@ export function inspect(spec: RobotSpec): InspectionResult {
     },
     { id: 'mass', label: 'Massa ≤ 500 g', ok: massOk, detail: `${(spec.mass * 1000).toFixed(0)} g` },
     { id: 'com', label: 'Centro de massa dentro do robô', ok: comInside, detail: `x ${mm(spec.comX)}, y ${mm(spec.comY)}` },
+    ...geom.notes.map((n, k) => ({ id: `nota${k}`, label: 'Aviso', ok: true, detail: n, note: true })),
     {
       id: 'geom',
       label: 'Geometria construível',
@@ -98,6 +101,8 @@ export interface ParamDef {
   apply: (s: RobotSpec, v: number) => void;
   group: 'Dimensões' | 'Lâmina' | 'Rodas' | 'Motor' | 'Massa';
   hint?: string;
+  /** 'toggle' = liga/desliga (valor 0/1) */
+  kind?: 'toggle';
 }
 
 const m2mm = (v: number) => +(v * 1000).toFixed(2);
@@ -112,12 +117,14 @@ export const PARAMS: ParamDef[] = [
   { key: 'bladeAngle', group: 'Lâmina', label: 'Ângulo da lâmina', unit: '°', min: 10, max: 60, step: 1, toUi: (s) => s.blade.angleDeg, apply: (s, v) => (s.blade.angleDeg = v), hint: 'Menor = entra mais fácil por baixo, levanta menos' },
   { key: 'bladeLen', group: 'Lâmina', label: 'Comprimento da lâmina', unit: 'mm', min: 6, max: 60, step: 0.5, toUi: (s) => m2mm(s.blade.length), apply: (s, v) => (s.blade.length = mm2m(v)), hint: 'Ao longo da rampa. Mais longa = levanta mais, mas rouba chassi' },
   { key: 'bladeH', group: 'Lâmina', label: 'Altura da lâmina', unit: 'mm', min: 2, max: 40, step: 0.5, toUi: (s) => m2mm(bladeHeight(s)), apply: (s, v) => (s.blade.length = mm2m(v) / Math.sin((s.blade.angleDeg * Math.PI) / 180)), hint: 'Ligada ao comprimento: altura = comprimento × sen(ângulo)' },
-  { key: 'bladeW', group: 'Lâmina', label: 'Largura da lâmina', unit: 'mm', min: 30, max: 110, step: 0.5, toUi: (s) => m2mm(s.blade.width), apply: (s, v) => (s.blade.width = mm2m(v)), hint: 'Mais estreita deixa as quinas e rodas expostas' },
+  { key: 'bladeW', group: 'Lâmina', label: 'Largura da lâmina', unit: 'mm', min: 30, max: 110, step: 0.5, toUi: (s) => m2mm(s.blade.width), apply: (s, v) => (s.blade.width = mm2m(v)), hint: 'Mais estreita deixa as quinas expostas (e as rodas, se não forem embutidas)' },
   { key: 'bladeGap', group: 'Lâmina', label: 'Folga da aresta', unit: 'mm', min: 0, max: 3, step: 0.05, toUi: (s) => m2mm(s.blade.edgeClearance), apply: (s, v) => (s.blade.edgeClearance = mm2m(v)), hint: 'Quem tem a aresta mais baixa entra por baixo' },
   { key: 'bladeMu', group: 'Lâmina', label: 'Atrito da lâmina', unit: 'μ', min: 0.05, max: 0.8, step: 0.01, toUi: (s) => s.blade.friction, apply: (s, v) => (s.blade.friction = v) },
   { key: 'wheelCount', group: 'Rodas', label: 'Nº de rodas', unit: '', min: 2, max: 4, step: 2, toUi: (s) => s.wheels.count, apply: (s, v) => (s.wheels.count = v >= 3 ? 4 : 2) },
   { key: 'wheelR', group: 'Rodas', label: 'Diâmetro', unit: 'mm', min: 16, max: 50, step: 0.5, toUi: (s) => m2mm(s.wheels.radius * 2), apply: (s, v) => (s.wheels.radius = mm2m(v) / 2) },
   { key: 'wheelW', group: 'Rodas', label: 'Largura do pneu', unit: 'mm', min: 5, max: 25, step: 0.5, toUi: (s) => m2mm(s.wheels.width), apply: (s, v) => (s.wheels.width = mm2m(v)) },
+  { key: 'wheelCover', group: 'Rodas', kind: 'toggle', label: 'Rodas embutidas', unit: '', min: 0, max: 1, step: 1, toUi: (s) => (s.wheels.covered === false ? 0 : 1), apply: (s, v) => (s.wheels.covered = v >= 0.5), hint: 'Chassi envolve as rodas com caixas de roda em arco' },
+  { key: 'wellGap', group: 'Rodas', label: 'Folga da caixa de roda', unit: 'mm', min: 0.5, max: 6, step: 0.5, toUi: (s) => m2mm(s.wheels.wellGap ?? 0.002), apply: (s, v) => (s.wheels.wellGap = mm2m(v)), hint: 'Espaço entre o pneu e a chassi' },
   { key: 'wheelMu', group: 'Rodas', label: 'Atrito do pneu', unit: 'μ', min: 0.4, max: 1.6, step: 0.01, toUi: (s) => s.wheels.friction, apply: (s, v) => (s.wheels.friction = v), hint: 'Silicone limpo na fórmica ≈ 1,0–1,3' },
   { key: 'rpm', group: 'Motor', label: 'Rotação livre', unit: 'RPM', min: 100, max: 2000, step: 10, toUi: (s) => s.motor.freeRpm, apply: (s, v) => (s.motor.freeRpm = v) },
   { key: 'stall', group: 'Motor', label: 'Torque de travamento', unit: 'kgf·cm', min: 0.3, max: 10, step: 0.1, toUi: (s) => +(s.motor.stallTorque / 0.0980665).toFixed(2), apply: (s, v) => (s.motor.stallTorque = v * 0.0980665), hint: 'Por motor (1 motor por roda)' },

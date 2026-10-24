@@ -9,7 +9,7 @@ Requer Node 20+.
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # 63 testes: física, juiz, partidas bot × bot, determinismo
+npm test             # 72 testes: física, juiz, partidas bot × bot, determinismo
 npm run analise      # duelos de comprimento/largura/ângulo da lâmina (docs/ANALISE-LAMINA.md)
 npm run build        # dist/ para hospedar
 npm run build:single # dist-single/index.html — um arquivo só, abre direto no navegador

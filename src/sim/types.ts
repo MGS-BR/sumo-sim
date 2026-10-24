@@ -43,6 +43,10 @@ export interface RobotSpec {
     width: number;
     /** Atrito estático pneu x fórmica (silicone ~1,0-1,3) */
     friction: number;
+    /** Rodas embutidas na chassi (caixas de roda nas laterais). Padrão: true */
+    covered?: boolean;
+    /** Folga entre a roda e a caixa de roda (m). Padrão: 2 mm */
+    wellGap?: number;
   };
 
   motor: {

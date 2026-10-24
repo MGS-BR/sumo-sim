@@ -341,7 +341,7 @@ export class App {
         <div class="ed-cam" role="group" aria-label="Câmera">
           <span class="lbl">Câmera</span>
           <div class="ed-cam-row">
-            <button data-view="perspectiva">3D</button><button data-view="frente">Frente</button><button data-view="lado">Lado</button><button data-view="cima">Cima</button>
+            <button data-view="perspectiva">3D</button><button data-view="frente">Frente</button><button data-view="lado">Lado</button><button data-view="tras">Trás</button><button data-view="cima">Cima</button>
             <button data-act="spin" aria-pressed="false">${icon('spin')} Auto-girar</button>
           </div>
           <small>Arraste para girar · roda/pinça = zoom · botão direito = mover</small>
@@ -360,6 +360,11 @@ export class App {
       scr.querySelectorAll<HTMLElement>('.prm').forEach((row) => {
         const p = PARAMS.find((x) => x.key === row.dataset.key);
         if (!p) return;
+        if (p.kind === 'toggle') {
+          const cb = row.querySelector<HTMLInputElement>('input[type=checkbox]');
+          if (cb) cb.checked = p.toUi(spec) >= 0.5;
+          return;
+        }
         const v = String(+p.toUi(spec).toFixed(2));
         const range = row.querySelector<HTMLInputElement>('input[type=range]')!;
         const num = row.querySelector<HTMLInputElement>('input[type=number]')!;
@@ -371,7 +376,7 @@ export class App {
       syncRows();
       const r = inspect(spec);
       scr.querySelector('.ed-insp')!.innerHTML = r.checks
-        .map((c) => `<div class="chk ${c.ok ? 'ok' : 'bad'}"><i>${icon(c.ok ? 'check' : 'x')}</i><b>${c.label}</b><span>${esc(c.detail)}</span></div>`)
+        .map((c) => `<div class="chk ${c.note ? 'note' : c.ok ? 'ok' : 'bad'}"><i>${icon(c.note ? 'flag' : c.ok ? 'check' : 'x')}</i><b>${c.label}</b><span>${esc(c.detail)}</span></div>`)
         .join('');
       const d = r.derived;
       scr.querySelector('.ed-derived')!.innerHTML = `
@@ -396,7 +401,15 @@ export class App {
         refresh();
       }),
     );
-    scr.querySelectorAll<HTMLElement>('.prm').forEach((row) => {
+    scr.querySelectorAll<HTMLElement>('.prm-toggle').forEach((row) => {
+      const p = PARAMS.find((x) => x.key === row.dataset.key)!;
+      const cb = row.querySelector<HTMLInputElement>('input[type=checkbox]')!;
+      cb.addEventListener('change', () => {
+        p.apply(spec, cb.checked ? 1 : 0);
+        refresh();
+      });
+    });
+    scr.querySelectorAll<HTMLElement>('.prm:not(.prm-toggle)').forEach((row) => {
       const p = PARAMS.find((x) => x.key === row.dataset.key)!;
       const range = row.querySelector<HTMLInputElement>('input[type=range]')!;
       const num = row.querySelector<HTMLInputElement>('input[type=number]')!;
@@ -410,7 +423,7 @@ export class App {
       num.addEventListener('change', () => set(+num.value));
     });
     scr.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
-      b.addEventListener('click', () => this.view.inspectView(b.dataset.view as 'perspectiva' | 'frente' | 'lado' | 'cima')),
+      b.addEventListener('click', () => this.view.inspectView(b.dataset.view as 'perspectiva' | 'frente' | 'lado' | 'tras' | 'cima')),
     );
     const spin = scr.querySelector<HTMLButtonElement>('[data-act=spin]')!;
     spin.addEventListener('click', () => {
@@ -440,6 +453,11 @@ export class App {
 
   private paramRow(p: ParamDef, spec: RobotSpec) {
     const v = p.toUi(spec);
+    if (p.kind === 'toggle')
+      return `<div class="prm prm-toggle" data-key="${p.key}">
+      <label>${p.label}${p.hint ? `<small>${p.hint}</small>` : ''}</label>
+      <label class="tog"><input type="checkbox" ${v ? 'checked' : ''} aria-label="${p.label}"><span></span></label>
+    </div>`;
     return `<div class="prm" data-key="${p.key}">
       <label>${p.label}${p.hint ? `<small>${p.hint}</small>` : ''}</label>
       <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}">

@@ -36,6 +36,13 @@ export function buildRobotView(spec: RobotSpec, team: number | null): RobotView 
   const track = <T extends { dispose(): void }>(x: T) => (disposables.push(x), x);
 
   const bodyMat = track(new THREE.MeshStandardMaterial({ color: spec.bodyColor, roughness: 0.55, metalness: 0.15, flatShading: true }));
+  // arestas escuras em chassi clara; claras (suaves) em chassi escura — senão o arco some no preto
+  const lum = (() => {
+    const c = new THREE.Color(spec.bodyColor);
+    return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  })();
+  const edgeColor = lum < 0.12 ? 0xffffff : 0x000000;
+  const edgeOpacity = lum < 0.12 ? 0.22 : 0.35;
   const body = new THREE.Mesh(track(hullGeometry(geom.bodyHull)), bodyMat);
   body.castShadow = true;
   body.receiveShadow = true;
@@ -44,9 +51,48 @@ export function buildRobotView(spec: RobotSpec, team: number | null): RobotView 
   // arestas sutis para leitura da forma em telas pequenas
   const edges = new THREE.LineSegments(
     track(new THREE.EdgesGeometry(body.geometry, 25)),
-    track(new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })),
+    track(new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: edgeOpacity })),
   );
   group.add(edges);
+
+  // Laterais com caixas de roda em arco (mesma forma usada nos colisores)
+  if (geom.shell) {
+    const { zInner, zOuter, pieces } = geom.shell;
+    const depth = zOuter - zInner;
+    // um pouco mais escuro dentro da caixa de roda dá leitura de profundidade
+    const wellMat = track(new THREE.MeshStandardMaterial({ color: new THREE.Color(spec.bodyColor).multiplyScalar(lum < 0.12 ? 0.35 : 0.55), roughness: 0.85 }));
+    const edgeMat = track(new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: edgeOpacity }));
+    for (const piece of pieces) {
+      const shape = new THREE.Shape(piece.map(([x, y]) => new THREE.Vector2(x, y)));
+      const g = track(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 1 }));
+      g.computeVertexNormals();
+      for (const sign of [1, -1]) {
+        // lado direito: z de zInner a zOuter; esquerdo: espelhado
+        const m = new THREE.Mesh(g, bodyMat);
+        m.position.z = sign > 0 ? zInner : -zOuter;
+        m.castShadow = true;
+        m.receiveShadow = true;
+        group.add(m);
+        const e = new THREE.LineSegments(track(new THREE.EdgesGeometry(g, 30)), edgeMat);
+        e.position.z = m.position.z;
+        group.add(e);
+      }
+    }
+    // fundo da caixa de roda: face do núcleo atrás da roda, escurecida
+    for (const w of geom.wheels) {
+      // círculo da caixa cortado na altura do fundo da chassi (embaixo é vão aberto)
+      const R = geom.shell.archRadius;
+      const pts: THREE.Vector2[] = [];
+      for (let k = 0; k <= 48; k++) {
+        const a = (k / 48) * Math.PI * 2;
+        pts.push(new THREE.Vector2(Math.cos(a) * R, Math.max(spec.groundClearance - w.y, Math.sin(a) * R)));
+      }
+      const disc = new THREE.Mesh(track(new THREE.ShapeGeometry(new THREE.Shape(pts))), wellMat);
+      disc.position.set(w.x, w.y, Math.sign(w.z) * (zInner + 0.0002));
+      if (w.z < 0) disc.rotation.y = Math.PI;
+      group.add(disc);
+    }
+  }
 
   const bladeMat = track(
     new THREE.MeshStandardMaterial({ color: 0xd8dde3, roughness: 0.25, metalness: 0.95, flatShading: true, envMap: metalEnv, envMapIntensity: 0.9 }),
