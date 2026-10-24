@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeSpec } from '../src/sim/specs';
-import { bladeHeight, clonePreset, PRESETS } from '../src/sim/presets';
+import { bladeHeight, PRESETS } from '../src/sim/presets';
+import { robot } from './fixtures';
 import { buildRobotGeometry } from '../src/sim/geometry';
 import { inspect, PARAMS } from '../src/sim/inspection';
 
 describe('lâmina: comprimento, largura e altura', () => {
   it('altura = comprimento × sen(ângulo) e os presets mantêm a altura da v0.1', () => {
-    expect(bladeHeight(clonePreset('trator')) * 1000).toBeCloseTo(10, 1);
-    expect(bladeHeight(clonePreset('bloco')) * 1000).toBeCloseTo(14, 1);
-    expect(bladeHeight(clonePreset('kunai')) * 1000).toBeCloseTo(12, 1);
+    expect(bladeHeight(robot('trator')) * 1000).toBeCloseTo(10, 1);
+    expect(bladeHeight(robot('bloco')) * 1000).toBeCloseTo(14, 1);
+    expect(bladeHeight(robot('kunai')) * 1000).toBeCloseTo(12, 1);
   });
 
   it('a largura da lâmina vira a largura do casco da lâmina', () => {
-    const s = clonePreset('trator');
+    const s = robot('trator');
     s.blade.width = 0.06;
     const g = buildRobotGeometry(s);
     const zs = g.bladeHull.filter((_, i) => i % 3 === 2);
@@ -20,7 +21,7 @@ describe('lâmina: comprimento, largura e altura', () => {
   });
 
   it('lâmina mais larga que o robô conta na caixa de inspeção', () => {
-    const s = clonePreset('bloco');
+    const s = robot('bloco');
     s.blade.width = 0.105;
     const r = inspect(s);
     expect(r.checks.find((c) => c.id === 'width')!.ok).toBe(false);
@@ -28,13 +29,13 @@ describe('lâmina: comprimento, largura e altura', () => {
   });
 
   it('lâmina longa demais reprova (sobra pouco chassi)', () => {
-    const s = clonePreset('trator');
+    const s = robot('trator');
     s.blade.length = 0.06;
     expect(inspect(s).checks.find((c) => c.id === 'geom')!.ok).toBe(false);
   });
 
   it('editor: mudar a altura recalcula o comprimento (mesmo ângulo)', () => {
-    const s = clonePreset('trator');
+    const s = robot('trator');
     const h = PARAMS.find((p) => p.key === 'bladeH')!;
     const len = PARAMS.find((p) => p.key === 'bladeLen')!;
     h.apply(s, 14);
@@ -45,7 +46,7 @@ describe('lâmina: comprimento, largura e altura', () => {
 
 describe('normalização de robôs salvos (localStorage)', () => {
   it('migra o formato antigo (altura da lâmina) para comprimento', () => {
-    const old = { ...clonePreset('trator'), blade: { angleDeg: 20, height: 0.01, edgeClearance: 0.0002, friction: 0.18 } };
+    const old = { ...robot('trator'), blade: { angleDeg: 20, height: 0.01, edgeClearance: 0.0002, friction: 0.18 } };
     const s = normalizeSpec(old)!;
     expect(s.blade.length * 1000).toBeCloseTo(29.2, 0);
     expect(s.blade.width).toBe(old.width);

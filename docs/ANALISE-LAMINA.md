@@ -1,6 +1,8 @@
 # Análise da lâmina — comprimento, largura e ângulo
 
 Reproduzir: `npm run analise` (≈1 min). Código em `analysis/blade.test.ts`.
+O Trator deixou de ser preset, mas continua como robô de teste (`tests/fixtures.ts`) com os mesmos valores. Rodada de novo depois da troca de presets: resultados idênticos.
+A análise dos presets atuais (Kunai, Tora, Fuji) está em [ANALISE-ROBOS.md](ANALISE-ROBOS.md).
 Resultados atualizados com as **rodas embutidas na chassi** (caixas de roda). A seção "O que mudou com as rodas embutidas" compara com a versão anterior.
 
 ## Como foi medido

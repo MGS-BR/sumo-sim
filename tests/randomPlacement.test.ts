@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Rng, normalizeSeed, randomSeed } from '../src/sim/rng';
 import { RANDOM_EDGE_MARGIN, defaultPlacement, footprint, placementIssue, randomPlacement } from '../src/sim/placement';
 import { ARENA } from '../src/sim/arena';
-import { PRESETS, clonePreset } from '../src/sim/presets';
+import { PRESETS } from '../src/sim/presets';
+import { robot } from './fixtures';
 import { Match } from '../src/sim/match';
 import { MODES, PHYSICS_DT } from '../src/sim/modes';
 import { SparringBot } from '../src/control/sparringBot';
@@ -56,7 +57,7 @@ describe('sorteio de pose (Art. 10)', () => {
   it('todas as poses sorteadas são legais, para todos os presets e os dois lados', () => {
     const rng = new Rng(2024);
     for (const p of PRESETS) {
-      const spec = clonePreset(p.id);
+      const spec = robot(p.id);
       for (const player of [0, 1]) {
         for (let k = 0; k < 400; k++) {
           const pose = randomPlacement(spec, player, rng);
@@ -69,7 +70,7 @@ describe('sorteio de pose (Art. 10)', () => {
   });
 
   it('é variado: giro em todas as direções, lateral e distância espalhadas', () => {
-    const spec = clonePreset('trator');
+    const spec = robot('tora');
     const rng = new Rng(99);
     const poses = Array.from({ length: 600 }, () => randomPlacement(spec, 0, rng));
     const quadrants = new Set(poses.map((p) => Math.floor(((p.yaw + Math.PI) / (2 * Math.PI)) * 4)));
@@ -90,20 +91,20 @@ describe('sorteio de pose (Art. 10)', () => {
       [0.06, 0.06],
       [0.1, 0.06],
     ]) {
-      const spec = { ...clonePreset('bloco'), length: L, width: W };
+      const spec = { ...robot('bloco'), length: L, width: W };
       for (let k = 0; k < 300; k++) for (const player of [0, 1]) expect(legal(spec, randomPlacement(spec, player, rng), player)).toBe(true);
     }
   });
 
   it('robô impossível (maior que a área) cai no padrão sem travar nem gerar NaN', () => {
-    const spec = { ...clonePreset('bloco'), length: 0.7, width: 0.7 };
+    const spec = { ...robot('bloco'), length: 0.7, width: 0.7 };
     const p = randomPlacement(spec, 0, new Rng(1));
     expect([p.x, p.z, p.yaw].every(Number.isFinite)).toBe(true);
   });
 });
 
 describe('Match com posicionamento aleatório', () => {
-  const specs = (): [RobotSpec, RobotSpec] => [clonePreset('trator'), clonePreset('kunai')];
+  const specs = (): [RobotSpec, RobotSpec] => [robot('tora'), robot('fuji')];
 
   it('desligado: posições padrão (comportamento antigo intacto)', async () => {
     const m = await Match.create({ specs: specs(), mode: MODES.realista, seed: 123 });

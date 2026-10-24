@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { engineMix } from '../src/audio';
-import { clonePreset } from '../src/sim/presets';
+import { robot as testRobot } from './fixtures';
 import type { RobotState } from '../src/sim/types';
 
-const spec = clonePreset('trator');
+const spec = testRobot('tora');
 const free = (spec.motor.freeRpm * 2 * Math.PI) / 60;
 const robot = (u: number, ratio: number, freeOmega = free): RobotState => ({
   position: { x: 0, y: 0.025, z: 0 },
@@ -35,7 +35,7 @@ describe('voz do motor', () => {
     expect(cruise.body).toBeGreaterThan(stall.body);
   });
   it('motor mais rápido soa mais agudo', () => {
-    const fast = clonePreset('kunai'); // 800 RPM
+    const fast = testRobot('kunai'); // 800 RPM
     const fastFree = (fast.motor.freeRpm * 2 * Math.PI) / 60;
     expect(engineMix(robot(1, 1, fastFree), fast).rotorHz).toBeGreaterThan(engineMix(robot(1, 1), spec).rotorHz);
   });

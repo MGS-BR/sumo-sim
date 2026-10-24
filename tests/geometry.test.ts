@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildRobotGeometry } from '../src/sim/geometry';
-import { clonePreset, PRESETS } from '../src/sim/presets';
+import { PRESETS } from '../src/sim/presets';
+import { robot } from './fixtures';
 import { inspect } from '../src/sim/inspection';
 import { normalizeSpec } from '../src/sim/specs';
 
@@ -39,7 +40,7 @@ describe('rodas embutidas na chassi (caixas de roda)', () => {
   });
 
   it('a caixa de roda é aberta embaixo (a roda encosta no chão) e redonda em cima', () => {
-    const p = clonePreset('bloco');
+    const p = robot('bloco');
     const g = buildRobotGeometry(p);
     const w = g.wheels[0];
     const R = w.radius + p.wheels.wellGap!;
@@ -50,14 +51,14 @@ describe('rodas embutidas na chassi (caixas de roda)', () => {
   });
 
   it('a física fiel ao arco: erro da corda < 0,6 mm', () => {
-    const p = clonePreset('kunai');
+    const p = robot('kunai');
     const R = p.wheels.radius + p.wheels.wellGap!;
     const slice = (2 * R) / 6;
     expect((R - Math.sqrt(R * R - (slice / 2) ** 2)) * 1000).toBeLessThan(0.6);
   });
 
   it('desligado: rodas por fora como antes, sem lateral', () => {
-    const p = clonePreset('bloco');
+    const p = robot('bloco');
     p.wheels.covered = false;
     const g = buildRobotGeometry(p);
     expect(g.shell).toBeNull();
@@ -65,13 +66,13 @@ describe('rodas embutidas na chassi (caixas de roda)', () => {
   });
 
   it('roda mais alta que a frente inclinada vira aviso, não reprovação', () => {
-    const r = inspect(clonePreset('trator'));
+    const r = inspect(robot('trator'));
     expect(r.ok).toBe(true);
     expect(r.checks.some((c) => c.note && /roda dianteira/.test(c.detail))).toBe(true);
   });
 
   it('a folga da caixa de roda muda o arco e continua dentro da caixa de inspeção', () => {
-    const p = clonePreset('kunai');
+    const p = robot('kunai');
     p.wheels.wellGap = 0.005;
     const g = buildRobotGeometry(p);
     expect(g.shell!.archRadius).toBeCloseTo(p.wheels.radius + 0.005, 9);
@@ -79,7 +80,7 @@ describe('rodas embutidas na chassi (caixas de roda)', () => {
   });
 
   it('robôs salvos antes desta versão ganham rodas embutidas e folga padrão', () => {
-    const old = structuredClone(clonePreset('bloco')) as any;
+    const old = structuredClone(robot('bloco')) as any;
     delete old.wheels.covered;
     delete old.wheels.wellGap;
     const s = normalizeSpec(old)!;

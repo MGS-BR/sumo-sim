@@ -9,7 +9,7 @@ import { inspect, PARAMS, type ParamDef } from './sim/inspection';
 import { defaultPlacement } from './sim/placement';
 import { loadRapier } from './sim/physics';
 import type { RobotSpec } from './sim/types';
-import { allRobots, isPreset, loadCustomRobots, loadSettings, newRobotId, saveCustomRobots, saveSettings } from './ui/storage';
+import { allRobots, isPreset, resolveSlots, loadCustomRobots, loadSettings, newRobotId, saveCustomRobots, saveSettings } from './ui/storage';
 import { PRESETS } from './sim/presets';
 import { icon, kbdArrow } from './ui/icons';
 
@@ -35,8 +35,8 @@ const DEFAULTS: Settings = {
   debug: false,
   muted: false,
   volume: 0.8,
-  p1: 'trator',
-  p2: 'kunai',
+  p1: 'tora',
+  p2: 'fuji',
 };
 
 const TEAM = ['Vermelho', 'Azul'];
@@ -48,6 +48,8 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = '') 
   return e;
 };
 const fmt = (v: number, d = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+/** milímetros com até 1 casa: 99,5 não vira "100" (que pareceria acima do limite) e 99 continua "99" */
+const fmtMm = (m: number) => (m * 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 
 type Screen = 'loading' | 'menu' | 'select' | 'editor' | 'game' | 'result';
 
@@ -74,8 +76,7 @@ export class App {
     if (!['p2', 'bot-facil', 'bot-medio', 'bot-dificil'].includes(this.settings.opponent)) this.settings.opponent = DEFAULTS.opponent;
     this.sfx.muted = this.settings.muted;
     this.sfx.volume = this.settings.volume;
-    if (!allRobots().some((r) => r.id === this.settings.p1)) this.settings.p1 = PRESETS[0].id;
-    if (!allRobots().some((r) => r.id === this.settings.p2)) this.settings.p2 = PRESETS[1].id;
+    this.fixSlots();
     window.addEventListener('keydown', (e) => this.onKey(e));
     // som em todos os botões (inclusive os do HUD), com um único listener
     root.addEventListener('click', (e) => this.uiSound(e), { capture: true });
@@ -106,6 +107,12 @@ export class App {
 
   private save() {
     saveSettings(this.settings);
+  }
+
+  /** lados apontando para robôs que existem (ex.: configuração salva com Bloco/Trator, que saíram) */
+  private fixSlots() {
+    const s = this.settings;
+    [s.p1, s.p2] = resolveSlots(s.p1, s.p2, allRobots().map((r) => r.id), [DEFAULTS.p1, DEFAULTS.p2]);
   }
 
   private robot(id: string): RobotSpec {
@@ -274,7 +281,7 @@ export class App {
         else this.openEditor(base, slot, false);
       });
       c.querySelector('[data-act=new]')!.addEventListener('click', () =>
-        this.openEditor({ ...this.robot('bloco'), id: newRobotId(), name: 'Meu robô' }, slot, true),
+        this.openEditor({ ...this.robot(DEFAULTS.p1), id: newRobotId(), name: 'Meu robô' }, slot, true),
       );
       return c;
     };
@@ -295,11 +302,11 @@ export class App {
     const r = inspect(spec);
     const d = r.derived;
     const rows: [string, string][] = [
-      ['Dimensões', `${fmt(spec.length * 1000)} × ${fmt(spec.width * 1000)} × ${fmt(spec.height * 1000)} mm`],
+      ['Dimensões', `${fmtMm(spec.length)} × ${fmtMm(spec.width)} × ${fmtMm(spec.height)} mm`],
       ['Massa', `${fmt(spec.mass * 1000)} g`],
-      ['Rodas', `${spec.wheels.count} × Ø${fmt(spec.wheels.radius * 2000)} mm · μ ${fmt(spec.wheels.friction, 2)}`],
+      ['Rodas', `${spec.wheels.count} × Ø${fmtMm(spec.wheels.radius * 2)} mm · μ ${fmt(spec.wheels.friction, 2)}`],
       ['Motor', `${fmt(spec.motor.freeRpm)} RPM · ${fmt(spec.motor.stallTorque / 0.0980665, 1)} kgf·cm`],
-      ['Lâmina', `${fmt(spec.blade.angleDeg)}° · ${fmt(spec.blade.length * 1000)} × ${fmt(spec.blade.width * 1000)} mm`],
+      ['Lâmina', `${fmt(spec.blade.angleDeg)}° · ${fmtMm(spec.blade.length)} × ${fmtMm(spec.blade.width)} mm`],
       ['Altura / aresta', `${fmt(d.bladeHeight * 1000, 1)} mm · folga ${fmt(spec.blade.edgeClearance * 1000, 2)} mm`],
       ['Velocidade máx.', `${fmt(d.topSpeed, 2)} m/s`],
       ['Peso nas rodas', `${fmt(d.wheelLoadFraction * 100)}%`],
@@ -447,8 +454,7 @@ export class App {
     scr.querySelector('[data-act=del]')?.addEventListener('click', () => {
       if (!confirm(`Excluir "${spec.name}"?`)) return;
       saveCustomRobots(loadCustomRobots().filter((r) => r.id !== spec.id));
-      if (this.settings.p1 === spec.id) this.settings.p1 = PRESETS[0].id;
-      if (this.settings.p2 === spec.id) this.settings.p2 = PRESETS[1].id;
+      this.fixSlots();
       this.save();
       this.showSelect();
     });

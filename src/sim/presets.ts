@@ -3,8 +3,8 @@ import type { RobotSpec } from './types';
 const kgfcm = (v: number) => v * 0.0980665; // kgf·cm -> N·m
 
 /**
- * Presets inspirados nas fotos de referência. Valores de motor na faixa de
- * motores comerciais de mini sumô (400-800 RPM, 16 mm, ~2-4 kgf·cm de torque de travamento).
+ * Kunai: inspirado na foto de referência. Tora e Fuji: configurações enviadas pelo usuário
+ * (valores copiados do editor). Valores de motor na faixa de motores comerciais de mini sumô (400-800 RPM, 16 mm, ~2-4 kgf·cm de torque de travamento).
  */
 export const PRESETS: RobotSpec[] = [
   {
@@ -27,41 +27,43 @@ export const PRESETS: RobotSpec[] = [
     bodyFriction: 0.4,
   },
   {
-    // Foto 2: caixa com frente quase vertical, lâmina curta, 4 rodas, todo o peso nas rodas
-    id: 'bloco',
-    name: 'Bloco (caixa 4WD)',
-    bodyColor: '#17181a',
-    tireColor: '#d23b2f',
+    // Configuração enviada pelo usuário (1ª imagem): caixa alta de frente quase vertical,
+    // lâmina rasante de 15°, 2 rodas de 26 mm e motor rápido (670 RPM)
+    id: 'tora',
+    name: 'Tora (rápido)',
+    bodyColor: '#e0672a',
+    tireColor: '#d1c32e',
     length: 0.099,
     width: 0.099,
     height: 0.05,
-    frontAngleDeg: 72,
-    groundClearance: 0.004,
-    blade: { angleDeg: 30, length: 0.028, width: 0.099, edgeClearance: 0.0005, friction: 0.2 },
-    wheels: { count: 4, radius: 0.0145, width: 0.011, friction: 1.1, covered: true, wellGap: 0.002 },
-    motor: { freeRpm: 400, stallTorque: kgfcm(3.7) },
+    frontAngleDeg: 80,
+    groundClearance: 0.005,
+    blade: { angleDeg: 15, length: 0.0205, width: 0.0995, edgeClearance: 0.0002, friction: 0.2 },
+    wheels: { count: 2, radius: 0.013, width: 0.014, friction: 1.1, covered: true, wellGap: 0.002 },
+    motor: { freeRpm: 670, stallTorque: kgfcm(4.4) },
     mass: 0.498,
-    comX: -0.006,
+    comX: -0.014,
     comY: 0.02,
     bodyFriction: 0.4,
   },
   {
-    // Foto 3 (direita): baixo, lâmina de aço larga e rasante, peso puxado para a frente
-    id: 'trator',
-    name: 'Trator (lâmina rasante)',
-    bodyColor: '#e0672a',
-    tireColor: '#222326',
+    // Configuração enviada pelo usuário (2ª imagem): caixa de 60 mm com frente a 60°,
+    // lâmina de 15°, 2 rodas de 22 mm e motor lento de muito torque (400 RPM)
+    id: 'fuji',
+    name: 'Fuji (torque)',
+    bodyColor: '#7a3fc0',
+    tireColor: '#2e75d1',
     length: 0.099,
     width: 0.099,
-    height: 0.036,
-    frontAngleDeg: 40,
-    groundClearance: 0.003,
-    blade: { angleDeg: 20, length: 0.0292, width: 0.099, edgeClearance: 0.0002, friction: 0.18 },
-    wheels: { count: 4, radius: 0.0135, width: 0.012, friction: 1.2, covered: true, wellGap: 0.002 },
-    motor: { freeRpm: 600, stallTorque: kgfcm(3.0) },
-    mass: 0.5,
-    comX: 0.003,
-    comY: 0.014,
+    height: 0.06,
+    frontAngleDeg: 60,
+    groundClearance: 0.004,
+    blade: { angleDeg: 15, length: 0.02, width: 0.099, edgeClearance: 0.0002, friction: 0.2 },
+    wheels: { count: 2, radius: 0.011, width: 0.011, friction: 1.1, covered: true, wellGap: 0.003 },
+    motor: { freeRpm: 400, stallTorque: kgfcm(3.7) },
+    mass: 0.498,
+    comX: -0.0155,
+    comY: 0.02,
     bodyFriction: 0.4,
   },
 ];

@@ -39,6 +39,24 @@ export function allRobots(): RobotSpec[] {
   return [...PRESETS, ...loadCustomRobots()];
 }
 
+/**
+ * Garante que os dois lados apontem para robôs que existem. Um id que sumiu (preset
+ * removido, robô excluído ou configuração adulterada) vira o padrão daquele lado ou,
+ * se o padrão já estiver no outro lado, o primeiro robô diferente dele.
+ */
+export function resolveSlots(p1: unknown, p2: unknown, ids: readonly string[], defaults: readonly [string, string]): [string, string] {
+  const has = (v: unknown): v is string => typeof v === 'string' && ids.includes(v);
+  const pick = (want: string, other: string | null) => {
+    const order = [want, ...ids].filter((id) => ids.includes(id));
+    return order.find((id) => id !== other) ?? order[0] ?? want;
+  };
+  let a = has(p1) ? p1 : null;
+  let b = has(p2) ? p2 : null;
+  if (a === null) a = pick(defaults[0], b);
+  if (b === null) b = pick(defaults[1], a);
+  return [a, b];
+}
+
 export function isPreset(id: string) {
   return PRESETS.some((p) => p.id === id);
 }

@@ -4,7 +4,7 @@
  */
 import { it } from 'vitest';
 import { loadRapier, SumoWorld } from '../src/sim/physics';
-import { clonePreset } from '../src/sim/presets';
+import { robot as clonePreset } from '../tests/fixtures';
 import { inspect } from '../src/sim/inspection';
 import { MODES, PHYSICS_HZ } from '../src/sim/modes';
 import { Match } from '../src/sim/match';

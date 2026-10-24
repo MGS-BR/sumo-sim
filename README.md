@@ -9,8 +9,8 @@ Requer Node 20+.
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # 87 testes: física, juiz, partidas bot × bot, sorteio, determinismo
-npm run analise      # duelos de comprimento/largura/ângulo da lâmina (docs/ANALISE-LAMINA.md)
+npm test             # 102 testes: física, juiz, presets, partidas bot × bot, sorteio, determinismo
+npm run analise      # lâmina (docs/ANALISE-LAMINA.md) e presets (docs/ANALISE-ROBOS.md)
 npm run build        # dist/ para hospedar
 npm run build:single # dist-single/index.html — um arquivo só, abre direto no navegador
 ```
@@ -37,7 +37,7 @@ Com **Posicionamento aleatório** ligado no menu, cada round sorteia posição e
 - **Modos:**
   - **Realista**: tempo real, e mexer antes do bip é Keikoku.
   - **Arcade**: a mesma física a 50% da velocidade.
-- **Robôs:** três presets e um editor. O editor valida a caixa de inspeção (100 mm, 500 g) e mostra velocidade, peso nas rodas e tração.
+- **Robôs:** três presets (Kunai, Tora e Fuji) e um editor. O editor valida a caixa de inspeção (100 mm, 500 g) e mostra velocidade, peso nas rodas e tração.
 - **Física:** a tração de cada roda é limitada por μ·N. Quando a lâmina do rival entra por baixo, N cai e o robô perde força. Ligue o debug (F2) para ver.
 
 - **Som:** motores e batidas de contato sintetizados no navegador; volume no menu.

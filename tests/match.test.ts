@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { Match } from '../src/sim/match';
 import { MODES, PHYSICS_DT } from '../src/sim/modes';
-import { clonePreset } from '../src/sim/presets';
+import { robot } from './fixtures';
+import { PRESETS } from '../src/sim/presets';
 import { SparringBot, type BotLevel } from '../src/control/sparringBot';
 import type { RefEvent } from '../src/sim/referee';
 import { EMPTY_FRAME, type ControlFrame } from '../src/sim/types';
 import { placementIssue } from '../src/sim/placement';
 
 async function botMatch(a: string, b: string, la: BotLevel = 'dificil', lb: BotLevel = 'dificil', maxSeconds = 600) {
-  const m = await Match.create({ specs: [clonePreset(a), clonePreset(b)], mode: MODES.realista });
+  const m = await Match.create({ specs: [robot(a), robot(b)], mode: MODES.realista });
   const bots = [new SparringBot(la), new SparringBot(lb)];
   const events: RefEvent[] = [];
   let t = 0;
@@ -26,7 +27,7 @@ async function botMatch(a: string, b: string, la: BotLevel = 'dificil', lb: BotL
 
 describe('posicionamento pelo Match', () => {
   it('pose absoluta (mouse) é corrigida para uma pose legal e o robô vai para lá', async () => {
-    const m = await Match.create({ specs: [clonePreset('bloco'), clonePreset('kunai')], mode: MODES.realista });
+    const m = await Match.create({ specs: [robot('bloco'), robot('kunai')], mode: MODES.realista });
     const drag: ControlFrame = { ...EMPTY_FRAME, placeTarget: { x: -0.2, z: 0.4, yaw: 2.4 } };
     for (let k = 0; k < 10; k++) m.step([drag, EMPTY_FRAME]);
     expect(m.ref.s.phase).toBe('placement');
@@ -39,7 +40,7 @@ describe('posicionamento pelo Match', () => {
   });
 
   it('depois de pronto o robô não se mexe mais; comandos com NaN não quebram a física', async () => {
-    const m = await Match.create({ specs: [clonePreset('bloco'), clonePreset('kunai')], mode: MODES.realista });
+    const m = await Match.create({ specs: [robot('bloco'), robot('kunai')], mode: MODES.realista });
     m.step([{ ...EMPTY_FRAME, ready: true }, EMPTY_FRAME]);
     const locked = { ...m.placements[0] };
     m.step([{ ...EMPTY_FRAME, placeTarget: { x: 0.3, z: 0.1, yaw: 0 } }, EMPTY_FRAME]);
@@ -56,7 +57,7 @@ describe('posicionamento pelo Match', () => {
 
 describe('evidência do toque fora', () => {
   it('registra onde e quando o perdedor encostou fora', async () => {
-    const m = await Match.create({ specs: [clonePreset('bloco'), clonePreset('kunai')], mode: MODES.realista });
+    const m = await Match.create({ specs: [robot('bloco'), robot('kunai')], mode: MODES.realista });
     m.step([{ ...EMPTY_FRAME, placeTarget: { x: 0.3, z: 0, yaw: 0 } }, EMPTY_FRAME]);
     m.step([{ ...EMPTY_FRAME, ready: true }, { ...EMPTY_FRAME, ready: true }]);
     const go: ControlFrame = { ...EMPTY_FRAME, drive: { left: 1, right: 1 } };
@@ -77,7 +78,7 @@ describe('evidência do toque fora', () => {
 
 describe('partida completa bot x bot', () => {
   it('chega ao fim com vencedor e sequência de eventos coerente', async () => {
-    const { m, events, t } = await botMatch('trator', 'bloco');
+    const { m, events, t } = await botMatch('tora', 'fuji');
     expect(m.ref.s.phase).toBe('over');
     expect(t).toBeLessThan(600);
     expect(events.filter((e) => e.type === 'bip').length).toBeGreaterThanOrEqual(1);
@@ -88,7 +89,7 @@ describe('partida completa bot x bot', () => {
     if (s.winner !== null) expect(s.scores[s.winner]).toBeGreaterThan(s.scores[1 - s.winner]);
     // resumo para inspeção manual
     console.log(
-      `trator x bloco: ${s.scores.join('x')} em ${t.toFixed(1)} s — ${s.endReason};`,
+      `tora x fuji: ${s.scores.join('x')} em ${t.toFixed(1)} s — ${s.endReason};`,
       events
         .filter((e) => e.type === 'yuko' || e.type === 'torinaoshi')
         .map((e) => (e.type === 'yuko' ? `yuko→${e.to.join('+')}(${e.reason})` : 'torinaoshi'))
@@ -97,8 +98,8 @@ describe('partida completa bot x bot', () => {
   });
 
   it('é determinística: mesma entrada, mesmo resultado (base do modo online)', async () => {
-    const r1 = await botMatch('kunai', 'trator', 'medio', 'medio', 40);
-    const r2 = await botMatch('kunai', 'trator', 'medio', 'medio', 40);
+    const r1 = await botMatch('kunai', 'tora', 'medio', 'medio', 40);
+    const r2 = await botMatch('kunai', 'tora', 'medio', 'medio', 40);
     expect(r2.final.tick).toBe(r1.final.tick);
     expect(r2.final.robots[0].position).toEqual(r1.final.robots[0].position);
     expect(r2.final.robots[1].rotation).toEqual(r1.final.robots[1].rotation);
@@ -106,7 +107,7 @@ describe('partida completa bot x bot', () => {
   });
 
   it('todas as combinações de presets terminam sem travar', async () => {
-    const ids = ['kunai', 'bloco', 'trator'];
+    const ids = PRESETS.map((p) => p.id);
     const lines: string[] = [];
     for (const a of ids)
       for (const b of ids) {

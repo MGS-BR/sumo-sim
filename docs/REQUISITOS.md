@@ -27,7 +27,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF05 | Fase de posicionamento (shikiri) com validação do Art. 10, pelo teclado ou arrastando com o mouse (roda gira; toque também funciona) | ✅ |
 | RF06 | Juiz automático: rounds, Yuko, Shinitai, Torinaoshi, Hansoku, Keikoku, Yusei, prorrogação | ✅ |
 | RF07 | HUD: placar de Yuko, Keikoku, round, relógio, contagem do juiz (1-2-3), mensagens | ✅ |
-| RF08 | Presets prontos (Kunai, Bloco, Trator) | ✅ |
+| RF08 | Presets prontos: Kunai (cunha), Tora (laranja, rápido) e Fuji (roxo, torque). Tora e Fuji usam os valores enviados pelo usuário. Bloco e Trator saíram e ficaram só como robôs de teste. Configuração salva com um robô que não existe mais cai num preset válido, diferente do outro lado | ✅ |
 | RF09 | Editor de robô: dimensões, lâmina (ângulo, comprimento, largura, altura ligada, aresta), rodas, motor, massa e CG; inspeção ao vivo; câmera controlada pelo mouse com vistas prontas; salvo no navegador | ✅ |
 | RF10 | Câmeras: transmissão, de cima, rente ao dohyo, livre (mouse) | ✅ |
 | RF11 | Replay em câmera lenta do lance do Yuko. Quando o ponto é por tocar fora, o replay congela no instante do toque, aproxima a câmera rente ao chão e marca o ponto | ✅ |
@@ -130,7 +130,7 @@ src/
     rng.ts          gerador pseudoaleatório com semente
     match.ts        física + juiz + posicionamento por tick
     inspection.ts   caixa de inspeção + parâmetros do editor
-    presets.ts      Kunai, Bloco, Trator
+    presets.ts      Kunai, Tora, Fuji
   control/        ← Controller: teclado, bot (e futuro: rede)
   render/         ← Three.js (só desenha)
   ui/             ← HUD, telas, CSS, persistência
@@ -185,7 +185,7 @@ tests/            vitest (física, juiz, partidas bot × bot, determinismo)
 - Exportar/importar robôs (JSON).
 - Mega Sumô e Sumô LEGO reaproveitando a mesma base (dimensões e limites já isolados).
 
-Análise detalhada de comprimento, largura e ângulo da lâmina: [ANALISE-LAMINA.md](ANALISE-LAMINA.md).
+Análise detalhada de comprimento, largura e ângulo da lâmina: [ANALISE-LAMINA.md](ANALISE-LAMINA.md). Análise dos presets (Kunai, Tora, Fuji): [ANALISE-ROBOS.md](ANALISE-ROBOS.md).
 
 ## 9. Limitações conhecidas
 - O modelo de pneu é simplificado: sem inércia própria da roda e sem curva de atrito por escorregamento.

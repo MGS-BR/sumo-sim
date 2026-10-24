@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { loadRapier, SumoWorld } from '../src/sim/physics';
-import { clonePreset, PRESETS } from '../src/sim/presets';
+import { PRESETS } from '../src/sim/presets';
+import { robot } from './fixtures';
 import { inspect } from '../src/sim/inspection';
 import { theoreticalTopSpeed, wheelForces } from '../src/sim/drive';
 import { PHYSICS_HZ } from '../src/sim/modes';
@@ -37,9 +38,9 @@ describe('caixa de inspeção (Art. 4)', () => {
     expect(r.checks.filter((c) => !c.ok)).toEqual([]);
   });
   it('reprova robô com mais de 100 mm ou mais de 500 g', () => {
-    const big: RobotSpec = { ...clonePreset('bloco'), length: 0.105 };
+    const big: RobotSpec = { ...robot('bloco'), length: 0.105 };
     expect(inspect(big).checks.find((c) => c.id === 'length')!.ok).toBe(false);
-    const heavy: RobotSpec = { ...clonePreset('bloco'), mass: 0.501 };
+    const heavy: RobotSpec = { ...robot('bloco'), mass: 0.501 };
     expect(inspect(heavy).checks.find((c) => c.id === 'mass')!.ok).toBe(false);
   });
   it('mini sumô é limitado pela tração, não pelo motor', () => {
@@ -65,7 +66,7 @@ describe('modelo de pneu', () => {
 
 describe('física do robô', () => {
   it.each(PRESETS.map((p) => [p.id] as const))('%s: fica estável parado e atinge a velocidade de projeto', (id) => {
-    const w = new SumoWorld(R, [clonePreset(id), clonePreset('bloco')]);
+    const w = new SumoWorld(R, [robot(id), robot('bloco')]);
     w.setPose(0, { x: -0.25, z: 0, yaw: 0 });
     far(w, 1);
     steps(w, 0.5);
@@ -84,7 +85,7 @@ describe('física do robô', () => {
   });
 
   it('gira no próprio eixo quando os lados vão em sentidos opostos', () => {
-    const w = new SumoWorld(R, [clonePreset('bloco'), clonePreset('bloco')]);
+    const w = new SumoWorld(R, [robot('bloco'), robot('bloco')]);
     w.setPose(0, { x: -0.2, z: 0, yaw: 0 });
     far(w, 1);
     steps(w, 0.2);
@@ -97,7 +98,7 @@ describe('física do robô', () => {
   });
 
   it('sai do dohyo e o "tocar fora" é detectado', () => {
-    const w = new SumoWorld(R, [clonePreset('bloco'), clonePreset('bloco')]);
+    const w = new SumoWorld(R, [robot('bloco'), robot('bloco')]);
     w.setPose(0, { x: 0.2, z: 0, yaw: 0 });
     far(w, 1);
     steps(w, 0.2);
@@ -117,8 +118,8 @@ describe('física do robô', () => {
   });
 
   it('basta UMA PARTE encostar fora: o toque é detectado com o robô ainda quase todo no dohyo', () => {
-    for (const id of ['bloco', 'kunai', 'trator']) {
-      const w = new SumoWorld(R, [clonePreset(id), clonePreset('bloco')]);
+    for (const id of [...PRESETS.map((p) => p.id), 'bloco']) {
+      const w = new SumoWorld(R, [robot(id), robot('bloco')]);
       w.setPose(0, { x: 0.25, z: 0, yaw: 0 });
       far(w, 1);
       steps(w, 0.2);
@@ -142,7 +143,7 @@ describe('física do robô', () => {
 
   it('a rampa funciona: a lâmina mais baixa tira peso das rodas do rival', () => {
     // Trator (aresta a 0,2 mm, 20°) contra Bloco (aresta a 0,5 mm)
-    const w = new SumoWorld(R, [clonePreset('trator'), clonePreset('bloco')]);
+    const w = new SumoWorld(R, [robot('trator'), robot('bloco')]);
     w.setPose(0, { x: -0.12, z: 0, yaw: 0 });
     w.setPose(1, { x: 0.12, z: 0, yaw: Math.PI });
     steps(w, 0.3);
@@ -179,7 +180,7 @@ describe('posicionamento (Art. 10)', () => {
     }
   });
   it('não deixa passar da shikiri-sen nem sair da faixa', () => {
-    const p = clonePreset('bloco');
+    const p = robot('bloco');
     const pose = defaultPlacement(p, 0);
     expect(placementIssue(p, { ...pose, x: pose.x - 0.02 }, 0)).toMatch(/shikiri/);
     expect(placementIssue(p, { ...pose, z: 0.2 }, 0)).toMatch(/faixa/);
@@ -189,7 +190,7 @@ describe('posicionamento (Art. 10)', () => {
     expect(placementIssue(p, q, 0)).toBeNull();
   });
   it('basta uma parte do robô na faixa, não o robô inteiro', () => {
-    const p = clonePreset('bloco');
+    const p = robot('bloco');
     const pose = defaultPlacement(p, 0);
     // centro a 9 cm do eixo: só 1 cm do robô fica dentro da faixa de ±5 cm
     expect(placementIssue(p, { ...pose, z: 0.09 }, 0)).toBeNull();
@@ -199,7 +200,7 @@ describe('posicionamento (Art. 10)', () => {
   });
 
   it('pode encostar sobre a linha marrom, mas não passar dela', () => {
-    const p = clonePreset('bloco');
+    const p = robot('bloco');
     const onLine = { x: PLACEMENT_LINE_X + p.length / 2, z: 0, yaw: Math.PI };
     expect(placementIssue(p, onLine, 0)).toBeNull();
     expect(placementIssue(p, { ...onLine, x: onLine.x - 0.001 }, 0)).toMatch(/shikiri/);
@@ -221,7 +222,7 @@ describe('posicionamento (Art. 10)', () => {
   });
 
   it('arrastar para qualquer lugar sempre resulta em pose legal e próxima do pedido', () => {
-    const p = clonePreset('kunai');
+    const p = robot('kunai');
     let seed = 7;
     const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31) * 2 - 1;
     for (let k = 0; k < 500; k++) {
@@ -241,7 +242,7 @@ describe('posicionamento (Art. 10)', () => {
   });
 
   it('entrada inválida (NaN/Infinity) é rejeitada', () => {
-    const p = clonePreset('bloco');
+    const p = robot('bloco');
     expect(constrainPlacement(p, { x: NaN, z: 0, yaw: 0 }, 0)).toBeNull();
     expect(constrainPlacement(p, { x: 0.2, z: Infinity, yaw: 0 }, 0)).toBeNull();
     const pose = defaultPlacement(p, 0);
@@ -249,7 +250,7 @@ describe('posicionamento (Art. 10)', () => {
   });
 
   it('posição em diagonal tocando a faixa é aceita (Fig. 9)', () => {
-    const p = clonePreset('bloco');
+    const p = robot('bloco');
     expect(placementIssue(p, { x: 0.2, z: 0.09, yaw: Math.PI * 0.75 }, 0)).toBeNull();
   });
 });
