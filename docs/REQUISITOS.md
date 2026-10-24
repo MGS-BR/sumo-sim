@@ -33,7 +33,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF11 | Replay em câmera lenta do lance do Yuko. Quando o ponto é por tocar fora, o replay congela no instante do toque, aproxima a câmera rente ao chão e marca o ponto | ✅ |
 | RF19 | Rodas embutidas na chassi: laterais em largura total com caixas de roda em arco e folga ajustável (padrão 2 mm). Opção de rodas por fora no editor. A física usa fatias convexas da mesma forma (erro < 0,6 mm) | ✅ |
 | RF18 | Ícone da página (dohyo), ícones SVG próprios na interface (sem emojis) e som em todos os botões, por tipo (confirmar, voltar, perigo, seleção) | ✅ |
-| RF17 | Sons: motor de cada robô (tom pela rotação, volume pela corrente), raspagem no contato, batida proporcional ao impacto, chiado de pneu patinando; volume ajustável | ✅ |
+| RF17 | Sons: motor de cada robô (tom pela rotação, volume pela corrente) e batida proporcional ao impacto quando os robôs se encostam; volume ajustável. Sem ruído contínuo de atrito/raspagem (removido a pedido) | ✅ |
 | RF12 | Modo debug: carga e tração por roda, patinação, CG, % do peso nas rodas | ✅ |
 | RF13 | Bot de treino (fácil/médio/difícil) | ✅ |
 | RF14 | Bot autônomo programável com sensores simulados (oponente, linha) | 🔜 |

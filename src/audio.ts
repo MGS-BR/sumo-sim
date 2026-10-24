@@ -3,7 +3,7 @@ import type { RobotSpec, SimSnapshot } from './sim/types';
 /**
  * Sons sintetizados com WebAudio (sem arquivos):
  *  - efeitos: bip de largada RC, contagem, Yuko, Keikoku, Torinaoshi, interface;
- *  - contínuos: motor de cada robô, atrito/raspagem no contato, chiado de pneu;
+ *  - contínuo: só o motor de cada robô (sem ruído de atrito/raspagem);
  *  - batida no início de cada contato, proporcional à velocidade de aproximação.
  *
  * Voz do motor (motor DC com redução, como os de mini sumô), em 4 camadas:
@@ -36,8 +36,6 @@ export class Sfx {
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private engines: EngineVoice[] | null = null;
-  private scrape: { filter: BiquadFilterNode; gain: GainNode } | null = null;
-  private squeal: { gain: GainNode } | null = null;
   private _muted = false;
   private _volume = 0.8;
 
@@ -260,8 +258,6 @@ export class Sfx {
       const brush = this.noiseLoop(ac, 'bandpass', 3800, 0.9, pan);
       return { saws, lfo, band, low, body, gear, gearGain, pwm, pwmGain, brushFilter: brush.filter, brushGain: brush.gain, pan };
     });
-    this.scrape = this.noiseLoop(ac, 'bandpass', 1400, 0.9, master);
-    this.squeal = this.noiseLoop(ac, 'highpass', 3200, 0.7, master);
   }
 
   /**
@@ -281,14 +277,11 @@ export class Sfx {
           e.pwmGain.gain.setTargetAtTime(0, t, 0.05);
           e.brushGain.gain.setTargetAtTime(0, t, 0.05);
         }
-        this.scrape?.gain.gain.setTargetAtTime(0, t, 0.05);
-        this.squeal?.gain.gain.setTargetAtTime(0, t, 0.05);
       }
       return;
     }
     this.ensureLoops(ac);
     const pitch = Math.sqrt(Math.max(0.1, timeScale));
-    let slipMax = 0;
     snap.robots.forEach((r, i) => {
       const e = this.engines![i];
       const spec = specs[i];
@@ -304,19 +297,8 @@ export class Sfx {
       e.brushFilter.frequency.setTargetAtTime((3000 + 2000 * m.ratio) * pitch, t, 0.06);
       e.brushGain.gain.setTargetAtTime(m.brush, t, 0.06);
       e.pan.pan.setTargetAtTime(Math.max(-0.8, Math.min(0.8, r.position.x / 0.45)), t, 0.05);
-      slipMax = Math.max(slipMax, m.slip);
     });
 
-    let scrape = 0;
-    if (snap.inContact) {
-      const [a, b] = snap.robots;
-      const rel = Math.hypot(a.linvel.x - b.linvel.x, a.linvel.z - b.linvel.z) + 0.03 * Math.abs(a.angvel.y - b.angvel.y);
-      const pushing = Math.min(1, (Math.abs(a.drive.left + a.drive.right) + Math.abs(b.drive.left + b.drive.right)) / 4);
-      scrape = Math.min(1, rel / 0.5) * 0.7 + pushing * 0.25;
-      this.scrape!.filter.frequency.setTargetAtTime((900 + 2200 * Math.min(1, rel / 0.6)) * pitch, t, 0.04);
-    }
-    this.scrape!.gain.gain.setTargetAtTime(scrape * 0.2, t, scrape > 0 ? 0.02 : 0.06);
-    this.squeal!.gain.gain.setTargetAtTime(Math.min(1, slipMax) * 0.04, t, 0.05);
   }
 }
 
@@ -325,11 +307,7 @@ export function engineMix(r: SimSnapshot['robots'][number], spec: RobotSpec) {
   const freeOmega = (spec.motor.freeRpm * 2 * Math.PI) / 60;
   const n = r.wheels.length || 1;
   let speed = 0;
-  let slip = 0;
-  for (const w of r.wheels) {
-    speed += Math.abs(w.omega);
-    if (w.slipping && w.load > 0) slip += Math.min(1, Math.abs(w.omega * spec.wheels.radius) / 0.4);
-  }
+  for (const w of r.wheels) speed += Math.abs(w.omega);
   const ratio = Math.min(1.25, speed / n / freeOmega);
   const u = Math.min(1, (Math.abs(r.drive.left) + Math.abs(r.drive.right)) / 2);
   // corrente ∝ tensão aplicada − força contraeletromotriz (rotação)
@@ -340,7 +318,6 @@ export function engineMix(r: SimSnapshot['robots'][number], spec: RobotSpec) {
   return {
     ratio,
     current,
-    slip: slip / n,
     rotorHz: 55 + rotorFree * ratio + 30 * u,
     body: on * (0.012 + 0.055 * Math.min(1, ratio) + 0.02 * u),
     gear: on * 0.016 * Math.min(1, ratio) ** 1.5,

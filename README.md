@@ -38,7 +38,7 @@ Contra o bot, **WASD ou setas** controlam o seu robô. No posicionamento também
 - **Robôs:** três presets e um editor. O editor valida a caixa de inspeção (100 mm, 500 g) e mostra velocidade, peso nas rodas e tração.
 - **Física:** a tração de cada roda é limitada por μ·N. Quando a lâmina do rival entra por baixo, N cai e o robô perde força. Ligue o debug (F2) para ver.
 
-- **Som:** motores, atrito e batidas sintetizados no navegador; volume no menu.
+- **Som:** motores e batidas de contato sintetizados no navegador; volume no menu.
 - **Evidência:** quando um robô encosta fora, o replay congela no toque e aproxima a câmera do ponto.
 
 Detalhes, decisões e interpretações do regulamento: [docs/REQUISITOS.md](docs/REQUISITOS.md).
