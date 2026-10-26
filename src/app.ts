@@ -11,6 +11,7 @@ import { loadRapier } from './sim/physics';
 import type { RobotSpec } from './sim/types';
 import { allRobots, isPreset, resolveSlots, loadCustomRobots, loadSettings, newRobotId, saveCustomRobots, saveSettings } from './ui/storage';
 import { PRESETS } from './sim/presets';
+import { TRAINING_BOX, boxDragForce, trainingBox } from './sim/training';
 import { MOTOR_PRESETS, TIRE_PRESETS, applyMotorPreset, applyTirePreset, motorLabel, motorPresetOf, tirePresetOf } from './sim/catalog';
 import { icon, kbdArrow } from './ui/icons';
 
@@ -74,7 +75,7 @@ export class App {
     this.ui = el('div', 'ui');
     root.appendChild(this.ui);
     if (!Object.hasOwn(MODES, this.settings.mode)) this.settings.mode = DEFAULTS.mode;
-    if (!['p2', 'bot-facil', 'bot-medio', 'bot-dificil'].includes(this.settings.opponent)) this.settings.opponent = DEFAULTS.opponent;
+    if (!['p2', 'treino', 'bot-facil', 'bot-medio', 'bot-dificil'].includes(this.settings.opponent)) this.settings.opponent = DEFAULTS.opponent;
     this.sfx.muted = this.settings.muted;
     this.sfx.volume = this.settings.volume;
     this.fixSlots();
@@ -161,7 +162,13 @@ export class App {
   showMenu() {
     this.endGame();
     this.screen = 'menu';
-    this.showcase([this.robot(this.settings.p1), this.robot(this.settings.p2)], [0.66, 0.26, 0.1], 0.16);
+    const showcase = () =>
+      this.showcase(
+        [this.robot(this.settings.p1), this.settings.opponent === 'treino' ? trainingBox() : this.robot(this.settings.p2)],
+        [0.66, 0.26, 0.1],
+        0.16,
+      );
+    showcase();
     const s = this.settings;
     const seg = <T extends string>(name: keyof Settings, opts: [T, string][]) =>
       `<div class="seg" data-name="${name}">${opts
@@ -185,6 +192,7 @@ export class App {
         ])}<p class="desc" data-desc="mode"></p></div>
         <div class="field"><span class="lbl">Oponente</span>${seg('opponent', [
           ['p2', '2 jogadores'],
+          ['treino', 'Treino (caixa)'],
           ['bot-facil', 'Bot fácil'],
           ['bot-medio', 'Bot médio'],
           ['bot-dificil', 'Bot difícil'],
@@ -222,6 +230,7 @@ export class App {
         (s as unknown as Record<string, string>)[g.dataset.name!] = b.dataset.v!;
         g.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
         descMode();
+        if (g.dataset.name === 'opponent') showcase();
         this.save();
       }),
     );
@@ -247,11 +256,13 @@ export class App {
     this.endGame();
     this.screen = 'select';
     const s = this.settings;
-    const specs: [RobotSpec, RobotSpec] = [this.robot(s.p1), this.robot(s.p2)];
+    const training = s.opponent === 'treino';
+    const specs: [RobotSpec, RobotSpec] = [this.robot(s.p1), training ? trainingBox() : this.robot(s.p2)];
     this.showcase(specs, [0.42, 0.16, 0.15]);
     this.ui.innerHTML = '';
     const scr = el('section', 'screen select');
     const col = (slot: 0 | 1) => {
+      if (slot === 1 && training) return this.boxColumn();
       const c = el('div', `pick team-${slot}`);
       const robots = allRobots();
       const chosen = slot === 0 ? s.p1 : s.p2;
@@ -286,10 +297,11 @@ export class App {
       );
       return c;
     };
-    const ok = inspect(specs[0]).ok && inspect(specs[1]).ok;
+    // a caixa do treino não é um robô: não passa pela caixa de inspeção
+    const ok = inspect(specs[0]).ok && (training || inspect(specs[1]).ok);
     const mid = el('div', 'vs');
     mid.innerHTML = `<div class="vs-mark">VS</div>
-      <div class="vs-info">${MODES[s.mode].label} · ${s.opponent === 'p2' ? '2 jogadores' : 'contra bot'}</div>
+      <div class="vs-info">${MODES[s.mode].label} · ${s.opponent === 'p2' ? '2 jogadores' : training ? 'treino contra a caixa' : 'contra bot'}${s.randomPlacement ? ' · posição aleatória' : ''}</div>
       <button class="primary big" data-act="fight" ${ok ? '' : 'disabled'}>${icon('play')} Lutar!</button>
       ${ok ? '' : '<p class="warn">Um dos robôs não passou na inspeção</p>'}
       <button class="ghost" data-act="back">${icon('left')} Menu</button>`;
@@ -297,6 +309,23 @@ export class App {
     this.ui.appendChild(scr);
     mid.querySelector('[data-act=fight]')!.addEventListener('click', () => this.startGame());
     mid.querySelector('[data-act=back]')!.addEventListener('click', () => this.showMenu());
+  }
+
+  /** Coluna do adversário no treino: a caixa é fixa (não escolhe nem edita) */
+  private boxColumn() {
+    const b = TRAINING_BOX;
+    const c = el('div', 'pick team-1');
+    const rows: [string, string][] = [
+      ['Dimensões', `${fmtMm(b.length)} × ${fmtMm(b.width)} × ${fmtMm(b.height)} mm`],
+      ['Massa', `${fmt(b.mass * 1000)} g`],
+      ['Atrito com o dohyo', `μ ${fmt(b.bodyFriction, 2)} <small>(madeira na fórmica)</small>`],
+      ['Força para arrastar', `${fmt(boxDragForce(), 1)} N`],
+    ];
+    c.innerHTML = `<h2><i></i>${TEAM[1]} <small>Treino</small></h2>
+      <div class="cards"><button class="card on" data-id="caixa" disabled><b>${esc(b.name)}</b><span>alvo</span></button></div>
+      <div class="sheet"><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      <p class="desc">Alvo passivo do tamanho e peso máximos de um Mini Sumô. Não ataca, não leva Hansoku por ficar parado e só se move empurrada. Com posição aleatória ligada, ela também é sorteada.</p></div>`;
+    return c;
   }
 
   private sheet(spec: RobotSpec) {
@@ -531,8 +560,9 @@ export class App {
   async startGame() {
     this.endGame();
     const s = this.settings;
-    const specs: [RobotSpec, RobotSpec] = [this.robot(s.p1), this.robot(s.p2)];
-    if (!inspect(specs[0]).ok || !inspect(specs[1]).ok) return this.showSelect();
+    const training = s.opponent === 'treino';
+    const specs: [RobotSpec, RobotSpec] = [this.robot(s.p1), training ? trainingBox() : this.robot(s.p2)];
+    if (!inspect(specs[0]).ok || (!training && !inspect(specs[1]).ok)) return this.showSelect();
     this.screen = 'game';
     this.ui.innerHTML = '';
     this.view.setFrameOffset(0);
@@ -577,6 +607,16 @@ export class App {
     this.keys.clearPressed();
   }
 
+  /** Tempos do treino: do bip até a caixa encostar fora, por round vencido */
+  private trainingSummary(times: number[]) {
+    if (!times.length) return '<p class="res-train">Nenhum round com a caixa fora do dohyo.</p>';
+    const s = (v: number) => `${fmt(v, 2)} s`;
+    const best = Math.min(...times);
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    return `<div class="res-train"><b>Caixa fora em</b> ${times.map((t) => `<span class="${t === best ? 'best' : ''}">${s(t)}</span>`).join('')}
+      <small>melhor ${s(best)} · média ${s(avg)}</small></div>`;
+  }
+
   private showResult(winner: number | null, reason: string) {
     if (!this.game) return;
     this.screen = 'result';
@@ -591,7 +631,8 @@ export class App {
       <h2 class="res-winner">${winner === null ? 'Hikiwake' : `${TEAM[winner]} · ${esc(specs[winner].name)}`}</h2>
       <div class="res-score"><span class="t0">${sc[0]}</span><i>×</i><span class="t1">${sc[1]}</span></div>
       <p class="desc">${esc(reason)}</p>
-      <button class="primary" data-act="again">${icon('refresh')} Revanche <kbd>Enter</kbd></button>
+      ${g.training ? this.trainingSummary(g.trainingTimes) : ''}
+      <button class="primary" data-act="again">${icon('refresh')} ${g.training ? 'Treinar de novo' : 'Revanche'} <kbd>Enter</kbd></button>
       <button data-act="select">${icon('swap')} Trocar robôs</button>
       <button data-act="menu">${icon('home')} Menu</button></div>`;
     this.ui.appendChild(r);

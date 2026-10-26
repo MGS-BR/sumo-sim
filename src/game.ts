@@ -7,6 +7,7 @@ import type { Controller } from './control/controller';
 import { KeyboardController, KEYMAPS, KeyboardState, mergedKeyMap } from './control/keyboard';
 import { SparringBot, type BotLevel } from './control/sparringBot';
 import { MousePlacement } from './control/mousePlacement';
+import { TrainingTarget } from './control/trainingTarget';
 import { randomSeed } from './sim/rng';
 import type { ArenaView } from './render/arenaView';
 import { CAMERA_LABELS } from './render/arenaView';
@@ -14,7 +15,8 @@ import { icon, kbdArrow } from './ui/icons';
 import type { Hud } from './ui/hud';
 import type { Sfx } from './audio';
 
-export type Opponent = 'p2' | `bot-${BotLevel}`;
+/** 'treino' = caixa passiva no lugar do adversário */
+export type Opponent = 'p2' | 'treino' | `bot-${BotLevel}`;
 
 export interface GameOptions {
   specs: [RobotSpec, RobotSpec];
@@ -44,6 +46,12 @@ export class Game {
   onEnd: (winner: number | null, reason: string) => void = () => {};
   private pendingEnd: { winner: number | null; reason: string; delay: number } | null = null;
   private mouse: MousePlacement | null = null;
+  /** tempo (s de jogo) do bip até a caixa encostar fora, em cada round vencido no treino */
+  readonly trainingTimes: number[] = [];
+
+  get training() {
+    return this.opts.opponent === 'treino';
+  }
 
   constructor(
     private view: ArenaView,
@@ -62,11 +70,15 @@ export class Game {
       randomPlacement: o.randomPlacement,
       seed: randomSeed(),
     });
+    // sozinho (contra bot ou caixa): WASD e setas controlam o mesmo robô
     const vsBot = o.opponent !== 'p2';
-    // sozinho contra o bot: WASD e setas controlam o mesmo robô
     const p1 = new KeyboardController(this.keys, vsBot ? mergedKeyMap(KEYMAPS[0], KEYMAPS[1]) : KEYMAPS[0], o.mode, 'Jogador 1');
     const p2: Controller =
-      o.opponent === 'p2' ? new KeyboardController(this.keys, KEYMAPS[1], o.mode, 'Jogador 2') : new SparringBot(o.opponent.slice(4) as BotLevel);
+      o.opponent === 'p2'
+        ? new KeyboardController(this.keys, KEYMAPS[1], o.mode, 'Jogador 2')
+        : o.opponent === 'treino'
+          ? new TrainingTarget()
+          : new SparringBot(o.opponent.slice(4) as BotLevel);
     this.controllers = [p1, p2];
     this.mouse = new MousePlacement(this.view, {
       active: () => this.match.ref.s.phase === 'placement' && !this.paused && !this.replaying,
@@ -86,7 +98,7 @@ export class Game {
     this.hud.show();
     this.keys.clearPressed();
     this.updateHelp();
-    this.hud.toast(`Round 1 · modo ${o.mode.label}${o.randomPlacement ? ' · posições sorteadas' : ''}`);
+    this.hud.toast(`${this.training ? 'Treino' : 'Round 1'} · modo ${o.mode.label}${o.randomPlacement ? ' · posições sorteadas' : ''}`);
   }
 
   private updateHelp() {
@@ -100,12 +112,12 @@ export class Game {
     if (drawn) {
       // posições sorteadas: não há o que ajustar, só confirmar
       p1 = bot ? `<b>Você</b> posição sorteada · <kbd>Espaço</kbd> pronto` : `<b>Vermelho</b> posição sorteada · <kbd>Espaço</kbd> pronto`;
-      p2 = bot ? '<b>Azul</b> bot · posição sorteada' : `<b>Azul</b> posição sorteada · <kbd>Enter</kbd> pronto`;
+      p2 = this.training ? '<b>Azul</b> caixa · posição sorteada' : bot ? '<b>Azul</b> bot · posição sorteada' : `<b>Azul</b> posição sorteada · <kbd>Enter</kbd> pronto`;
     } else if (bot) {
       p1 = placing
         ? `<b>Você</b> ${wasd} ou ${arrows} posicionar · <kbd>Q</kbd><kbd>E</kbd> deslizar · <kbd>Espaço</kbd> pronto`
         : `<b>Você</b> ${wasd} ou ${arrows} · Shift ajuste fino`;
-      p2 = '<b>Azul</b> bot';
+      p2 = this.training ? '<b>Azul</b> caixa de treino' : '<b>Azul</b> bot';
     } else {
       p1 = placing
         ? `<b>Vermelho</b> ${wasd} · <kbd>Q</kbd><kbd>E</kbd> deslizar · <kbd>Espaço</kbd> pronto`
@@ -257,7 +269,15 @@ export class Game {
           const loser = both ? null : 1 - e.to[0];
           const touch = loser !== null ? this.match.outTouches[loser] : null;
           this.evidence = physicalPoint && touch ? { who: loser!, touch } : null;
-          if (this.evidence) this.hud.toast(`${TEAM[this.evidence.who]} encostou fora do dohyo`, this.evidence.who);
+          if (this.training && physicalPoint && !both) {
+            // treino: cronometra do bip até a caixa encostar fora
+            const boxOut = this.match.outTouches[1];
+            if (e.to[0] === 0 && boxOut) {
+              const t = boxOut.t - this.match.fightStart;
+              this.trainingTimes.push(t);
+              this.hud.toast(`Caixa fora em ${t.toLocaleString('pt-BR', { maximumFractionDigits: 2, minimumFractionDigits: 2 })} s`, 0);
+            } else if (e.to[0] === 1) this.hud.toast('Você saiu do dohyo', 0);
+          } else if (this.evidence) this.hud.toast(`${TEAM[this.evidence.who]} encostou fora do dohyo`, this.evidence.who);
           if (this.opts.replay && physicalPoint && this.match.replay.length > 20) this.replayStartDelay = 0.6;
           break;
         }

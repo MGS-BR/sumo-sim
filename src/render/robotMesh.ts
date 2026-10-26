@@ -97,9 +97,21 @@ export function buildRobotView(spec: RobotSpec, team: number | null): RobotView 
   const bladeMat = track(
     new THREE.MeshStandardMaterial({ color: 0xd8dde3, roughness: 0.25, metalness: 0.95, flatShading: true, envMap: metalEnv, envMapIntensity: 0.9 }),
   );
-  const blade = new THREE.Mesh(track(hullGeometry(geom.bladeHull)), bladeMat);
-  blade.castShadow = true;
-  group.add(blade);
+  if (geom.bladeHull.length) {
+    const blade = new THREE.Mesh(track(hullGeometry(geom.bladeHull)), bladeMat);
+    blade.castShadow = true;
+    group.add(blade);
+  }
+  if (spec.passive) {
+    // caixa de treino: fita adesiva cruzando o topo, para ler o giro da caixa
+    const tapeMat = track(new THREE.MeshStandardMaterial({ color: 0xe9dcc0, roughness: 0.9 }));
+    for (const rot of [0, Math.PI / 2]) {
+      const tape = new THREE.Mesh(track(new THREE.BoxGeometry(spec.length * 1.002, 0.0006, 0.014)), tapeMat);
+      tape.position.y = spec.height + 0.0003;
+      tape.rotation.y = rot;
+      group.add(tape);
+    }
+  }
 
   // Rodas: pneu + cubo, eixo ao longo de z
   const tireMat = track(new THREE.MeshStandardMaterial({ color: spec.tireColor, roughness: 0.85 }));

@@ -78,6 +78,19 @@ describe('física do robô', () => {
     w.dispose();
   });
 
+  it.each(PRESETS.map((p) => [p.id] as const))('%s: parado por 3 s não escorrega (< 1 mm) nem gira (< 0,1°)', (id) => {
+    const w = new SumoWorld(R, [robot(id), robot('bloco')]);
+    w.setPose(0, { x: -0.2, z: 0.05, yaw: 0.3 });
+    far(w, 1);
+    steps(w, 0.3);
+    const a = w.robotState(0);
+    steps(w, 3);
+    const b = w.robotState(0);
+    expect(Math.hypot(b.position.x - a.position.x, b.position.z - a.position.z)).toBeLessThan(0.001);
+    expect(Math.abs(b.yaw - a.yaw)).toBeLessThan((0.1 * Math.PI) / 180);
+    w.dispose();
+  });
+
   it('gira no próprio eixo quando os lados vão em sentidos opostos', () => {
     const w = new SumoWorld(R, [robot('bloco'), robot('bloco')]);
     w.setPose(0, { x: -0.2, z: 0, yaw: 0 });

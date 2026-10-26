@@ -6,22 +6,23 @@ import { PHYSICS_HZ } from '../src/sim/modes';
 import { resolveSlots } from '../src/ui/storage';
 import type { Quat } from '../src/sim/types';
 import { robot, softStart } from './fixtures';
-import { applyMotorPreset, applyTirePreset } from '../src/sim/catalog';
+import { applyMotorPreset, applyTirePreset, motorPresetOf } from '../src/sim/catalog';
 import type { RobotSpec } from '../src/sim/types';
 
-/** Valores lidos no editor nas imagens enviadas (unidades da interface). */
+/** Valores lidos no editor nas imagens enviadas (unidades da interface). O motor foi trocado depois,
+ *  a pedido, por um motor real do catálogo (ver teste abaixo). */
 const FROM_SCREENSHOTS: Record<string, Record<string, number>> = {
   tora: {
     length: 99, width: 99, height: 50, frontAngle: 80, gc: 5,
     bladeAngle: 15, bladeLen: 20.5, bladeH: 5.31, bladeW: 99.5, bladeGap: 0.2, bladeMu: 0.2,
     wheelCount: 2, wheelR: 26, wheelW: 14, wheelCover: 1, wellGap: 2, wheelMu: 1.1,
-    rpm: 670, stall: 4.4, mass: 498, comX: -14, comY: 20,
+    mass: 498, comX: -14, comY: 20,
   },
   fuji: {
     length: 99, width: 99, height: 60, frontAngle: 60, gc: 4,
     bladeAngle: 15, bladeLen: 20, bladeH: 5.18, bladeW: 99, bladeGap: 0.2, bladeMu: 0.2,
     wheelCount: 2, wheelR: 22, wheelW: 11, wheelCover: 1, wellGap: 3, wheelMu: 1.1,
-    rpm: 400, stall: 3.7, mass: 498, comX: -15.5, comY: 20,
+    mass: 498, comX: -15.5, comY: 20,
   },
 };
 
@@ -53,6 +54,22 @@ describe('lista de presets', () => {
     }
   });
 
+  it('cada preset usa um motor do catálogo, um de cada família (N20, N30, JGA16-050)', () => {
+    const fams = PRESETS.map((p) => {
+      const m = motorPresetOf(p);
+      expect(m, p.id).not.toBeNull();
+      return m!.family;
+    });
+    expect(new Set(fams)).toEqual(new Set(['N20', 'N30', 'JGA16-050']));
+    expect(motorPresetOf(robot('kunai'))!.id).toBe('jga16-6-32');
+    expect(motorPresetOf(robot('tora'))!.id).toBe('n30-12-50');
+    expect(motorPresetOf(robot('fuji'))!.id).toBe('n20hp6-50');
+  });
+
+  it('com motor real nenhum preset dispara o aviso de empinar', () => {
+    for (const p of PRESETS) expect(inspect(p).derived.wheelieDeg, p.id).toBeLessThan(15);
+  });
+
   it('cores: Tora laranja, Fuji roxo (pneus como nas imagens)', () => {
     const tora = robot('tora');
     const fuji = robot('fuji');
@@ -73,10 +90,10 @@ describe('lista de presets', () => {
 describe('Tora e Fuji na física', () => {
   const pitch = (q: Quat) => (Math.asin(Math.max(-1, Math.min(1, 2 * (q.x * q.y + q.w * q.z)))) * 180) / Math.PI;
 
-  const launch = async (spec: RobotSpec, phases: [seconds: number, target: number][]) => {
+  const launch = async (spec: RobotSpec, phases: [seconds: number, target: number][], x0 = -0.3) => {
     const R = await loadRapier();
     const w = new SumoWorld(R, [spec, robot('bloco')]);
-    w.setPose(0, { x: -0.3, z: 0, yaw: 0 });
+    w.setPose(0, { x: x0, z: 0, yaw: 0 });
     w.setPose(1, { x: 0.3, z: 0.3, yaw: 0 });
     const ramp = softStart();
     let hi = 0;
@@ -103,10 +120,11 @@ describe('Tora e Fuji na física', () => {
   });
 
   it('frear de ré a 100%: mais inércia no rotor (τ maior) empina mais — é a reação no chassi', async () => {
+    // motor forte de propósito (o antigo do Tora, 670 RPM / 4,4 kgf·cm): é o caso em que a reação aparece
     const run = (tau: number) => {
       const s = robot('tora');
-      s.motor.timeConstant = tau;
-      return launch(s, [[0.3, 0], [0.6, -1], [0.5, 0]]);
+      s.motor = { freeRpm: 670, stallTorque: 4.4 * 0.0980665, timeConstant: tau };
+      return launch(s, [[0.3, 0], [0.6, -1], [0.5, 0]], 0.25);
     };
     const small = await run(0.002);
     const big = await run(0.015);

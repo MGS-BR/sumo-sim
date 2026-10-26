@@ -66,6 +66,8 @@ export class Match {
   lastSnapshot: SimSnapshot;
   replay: ReplayFrame[] = [];
   outTouches: [OutTouch | null, OutTouch | null] = [null, null];
+  /** instante (s de simulação) do bip do round atual */
+  fightStart = 0;
   tick = 0;
 
   static async create(opts: MatchOptions): Promise<Match> {
@@ -77,7 +79,12 @@ export class Match {
     this.sim = sim;
     this.specs = opts.specs;
     this.mode = opts.mode;
-    this.ref = new Referee({ falseStartRule: opts.mode.falseStartRule, ...opts.rules });
+    // a caixa do treino é passiva por construção: o juiz não pode cobrar movimento dela
+    this.ref = new Referee({
+      falseStartRule: opts.mode.falseStartRule,
+      ...opts.rules,
+      passive: [opts.specs[0].passive === true, opts.specs[1].passive === true],
+    });
     this.randomPlacement = opts.randomPlacement === true;
     this.seed = normalizeSeed(opts.seed ?? 1);
     this.rng = new Rng(this.seed);
@@ -155,6 +162,7 @@ export class Match {
     } else if (e.phase === 'countdown') {
       this.startPoses = [{ ...this.placements[0] }, { ...this.placements[1] }];
     } else if (e.phase === 'fight') {
+      this.fightStart = this.lastSnapshot.time;
       this.replay = [];
       this.outTouches = [null, null];
     }

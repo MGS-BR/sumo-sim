@@ -71,6 +71,14 @@ kbd { font-family: var(--mono); font-size: 0.75em; padding: 1px 6px; border: 1px
 .seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
 .seg button { min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0 !important; background: none !important; padding: 9px 10px !important; color: var(--muted); border-radius: 7px !important; }
 .seg button.on { background: var(--ink) !important; color: #0c0e12; }
+/* oponente: 2 jogadores e treino na 1ª linha, os três bots na 2ª */
+.seg[data-name=opponent] { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.seg[data-name=opponent] button { grid-column: span 2; }
+.seg[data-name=opponent] button[data-v=p2], .seg[data-name=opponent] button[data-v=treino] { grid-column: span 3; }
+.res-train { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; justify-content: center; margin: 4px 0 6px; font-size: .9rem; }
+.res-train span { font: 600 .82rem var(--mono); padding: 2px 7px; border: 1px solid var(--line); border-radius: 6px; }
+.res-train span.best { border-color: var(--ok); color: var(--ok); }
+.res-train small { flex-basis: 100%; text-align: center; color: var(--muted); }
 .tog { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; cursor: pointer; padding: 4px 0; }
 .tog input { position: absolute; opacity: 0; pointer-events: none; }
 .tog span { width: 36px; height: 20px; border-radius: 20px; background: rgba(255,255,255,.12); position: relative; transition: background .15s; }
@@ -269,6 +277,8 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
   .hud-dots i { width: 12px; height: 12px; }
 }
 @media (max-width: 420px) {
+  /* botões do seletor cabem inteiros até 320 px ("Bot difícil", "Treino (caixa)") */
+  .seg button { padding: 9px 3px !important; font-size: .86rem; }
   /* tela estreita: marcadores de ponto descem para baixo do nome em vez de cortá-lo */
   .hud-team { grid-template-columns: minmax(0, 1fr); }
   .hud-dots { grid-column: 1; grid-row: auto; }

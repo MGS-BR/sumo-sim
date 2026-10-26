@@ -73,6 +73,12 @@ export interface RobotSpec {
 
   /** Atrito do chassi (plástico/alumínio) */
   bodyFriction: number;
+
+  /**
+   * Alvo passivo (caixa do modo treino): um bloco sem rodas, motor nem lâmina que só
+   * escorrega quando empurrado. Nunca vem de dados salvos (normalizeSpec descarta).
+   */
+  passive?: boolean;
 }
 
 /** Comando de acionamento: tensão relativa em cada lado, -1..1 (PWM) */

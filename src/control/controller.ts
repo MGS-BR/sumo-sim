@@ -21,7 +21,8 @@ export interface ControlContext {
  * recebidos pela rede para cada tick.
  */
 export interface Controller {
-  readonly kind: 'keyboard' | 'bot' | 'remote';
+  /** 'target' = alvo passivo do modo treino */
+  readonly kind: 'keyboard' | 'bot' | 'remote' | 'target';
   readonly label: string;
   poll(ctx: ControlContext): ControlFrame;
   dispose?(): void;

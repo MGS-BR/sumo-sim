@@ -1,6 +1,6 @@
 # Rodas e motores — pesquisa, modelo e análise
 
-Reproduzir: `npm run analise` (cerca de 7 min para as três análises). Código em `analysis/wheels.test.ts`.
+Reproduzir: `npm run analise` (cerca de 7 min). Código em `analysis/wheels.test.ts`.
 
 ## 1. Presets de motor
 
@@ -183,19 +183,20 @@ Roda S20, 18 largadas por par. Venceu mais quem empina menos no choque, não que
 
 Com a lâmina igual dos dois lados, o lado que levanta o nariz perde a disputa de lâminas.
 
-## 5. Tora e Fuji com o novo modelo
+## 5. Motores antigos do Tora e do Fuji, e a troca
 
-Os motores do Tora (670 RPM, 4,4 kgf·cm) e do Fuji (400 RPM, 3,7 kgf·cm) são **5 a 10 vezes mais fortes** que qualquer N20, N30 ou JGA16-050 da mesma rotação. O JGA16-050 a ~480–750 RPM trava com 0,46–0,65 kgf·cm.
+Os motores enviados para o Tora (670 RPM, 4,4 kgf·cm) e o Fuji (400 RPM, 3,7 kgf·cm) eram **5 a 10 vezes mais fortes** que qualquer N20, N30 ou JGA16-050 da mesma rotação. O JGA16-050 a ~480–750 RPM trava com 0,46–0,65 kgf·cm.
 
-**Consequências no simulador:**
-- **Tora:**
-  - com partida suave, empina ~42° na largada;
-  - numa largada seca (0 → 100% num passo), fica em pé;
-  - ao soltar o comando vindo de ré a 100%, pode capotar.
-- **Fuji:** empina ~23° com partida suave e ~33° na largada seca.
-- **Estimativa do editor:** o editor estima isso e mostra um aviso a partir de 15°.
+**Com aqueles motores, no simulador:**
+- **Tora:** empinava ~42° na largada mesmo com partida suave, ficava em pé numa largada seca e podia capotar ao soltar o comando vindo de ré a 100%.
+- **Fuji:** empinava ~23° com partida suave e ~33° numa largada seca.
 
-Os presets ficaram com os valores enviados. Se o motor real for um JGA16-050 ou um N20, escolha o preset do catálogo no editor e o robô deixa de empinar. No teste, o Tora com JGA16 25:1 e roda S20 inclinou menos de 15° mesmo na largada e na inversão secas.
+**Depois da troca**, cada preset ganhou um motor real, um de cada família:
+- Kunai: JGA16-050 32:1;
+- Tora: N30 12 V 50:1;
+- Fuji: N20 HP 50:1.
+
+Nenhum deles empina com partida suave; a largada seca dá no máximo 8°. A escolha e a análise estão em [ANALISE-ROBOS.md](ANALISE-ROBOS.md), seção "Motor de cada preset". O editor continua avisando a partir de 15° quando um motor personalizado sobra.
 
 ## Limitações
 

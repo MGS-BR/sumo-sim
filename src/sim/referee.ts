@@ -41,6 +41,8 @@ export interface RulesConfig {
   idleAngSpeed: number;
   falseStartDistance: number;
   falseStartAngle: number;
+  /** Alvo passivo (caixa do modo treino): não leva Hansoku por ficar parado */
+  passive: [boolean, boolean];
 }
 
 export const DEFAULT_RULES: RulesConfig = {
@@ -62,6 +64,7 @@ export const DEFAULT_RULES: RulesConfig = {
   idleAngSpeed: 0.15,
   falseStartDistance: 0.004,
   falseStartAngle: 0.05,
+  passive: [false, false],
 };
 
 export interface RobotFact {
@@ -304,7 +307,7 @@ export class Referee {
         const idle = r.speed < R.idleSpeed && r.angSpeed < R.idleAngSpeed;
         // Encostado e parado só é "travado" se o motor está fazendo força; motor desligado = parado
         const inert = r.driveEffort < 0.05;
-        cnt.parado[i] = idle && (!f.inContact || inert) ? cnt.parado[i] + f.dt : 0;
+        cnt.parado[i] = !R.passive[i] && idle && (!f.inContact || inert) ? cnt.parado[i] + f.dt : 0;
       }
       const bothIdle = a.speed < R.idleSpeed * 1.5 && b.speed < R.idleSpeed * 1.5;
       const bothDriving = a.driveEffort >= 0.05 && b.driveEffort >= 0.05;
@@ -339,6 +342,7 @@ export class Referee {
 
       // Yusei (Art. 15): acumula iniciativa ao longo da luta
       for (const i of [0, 1]) {
+        if (R.passive[i]) continue; // a caixa do treino não "domina" a luta parada no centro
         const r = f.robots[i];
         s.yusei[i] += f.dt * ((r.pushing ? 1 : 0) + 0.15 * Math.max(0, 1 - r.radius / 0.385));
       }

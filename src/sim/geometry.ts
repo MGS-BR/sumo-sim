@@ -156,6 +156,7 @@ function extrude(profile: [number, number][], halfZ: number): number[] {
 }
 
 export function buildRobotGeometry(spec: RobotSpec): RobotGeometry {
+  if (spec.passive) return boxGeometry(spec);
   const issues: string[] = [];
   const L = spec.length;
   const W = spec.width;
@@ -262,8 +263,31 @@ export function buildRobotGeometry(spec: RobotSpec): RobotGeometry {
   };
 }
 
+/** Caixa do modo treino: um bloco L × A × W apoiado no chão, sem rodas nem lâmina */
+function boxGeometry(spec: RobotSpec): RobotGeometry {
+  const hl = spec.length / 2;
+  const hw = spec.width / 2;
+  const H = spec.height;
+  const bodyHull: number[] = [];
+  for (const x of [-hl, hl]) for (const y of [0, H]) for (const z of [-hw, hw]) bodyHull.push(x, y, z);
+  return {
+    bodyHull,
+    bladeHull: [],
+    wheels: [],
+    bladeBackX: hl,
+    topFrontX: hl,
+    bodyHalfWidth: hw,
+    bladeHalfWidth: hw,
+    shell: null,
+    bounds: { minX: -hl, maxX: hl, minY: 0, maxY: H, minZ: -hw, maxZ: hw },
+    issues: [],
+    notes: [],
+  };
+}
+
 /** Distribuição estática do peso: fração sobre as rodas (o resto apoia na lâmina). */
 export function staticWheelLoadFraction(spec: RobotSpec, geom = buildRobotGeometry(spec)): number {
+  if (!geom.wheels.length) return 0;
   if (spec.blade.edgeClearance > 0.0004 || spec.wheels.count === 4) {
     // Com folga na lâmina (ou 4 rodas com o CG entre os eixos), o peso fica todo nas rodas
     const xs = geom.wheels.map((w) => w.x);

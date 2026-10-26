@@ -152,7 +152,7 @@ export class SumoWorld {
       );
     };
     colliders.push(hull(geom.bodyHull, spec.bodyFriction));
-    colliders.push(hull(geom.bladeHull, spec.blade.friction));
+    if (geom.bladeHull.length) colliders.push(hull(geom.bladeHull, spec.blade.friction));
     // laterais que envolvem as rodas (fatias convexas da mesma forma desenhada)
     for (const h of geom.shell?.hulls ?? []) colliders.push(hull(h, spec.bodyFriction));
     // Rodas: só colidem com o OUTRO robô. O contato com o chão é do modelo de pneu (raycast).
@@ -235,6 +235,7 @@ export class SumoWorld {
   }
 
   private applyWheels(r: RobotRuntime, dt: number) {
+    if (!r.wheels.length) return; // caixa do treino: sem rodas, só o contato do corpo com o chão
     const R = this.R;
     const body = r.body;
     const pos = body.translation();

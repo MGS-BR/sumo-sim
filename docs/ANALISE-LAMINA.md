@@ -1,6 +1,6 @@
 # Análise da lâmina — comprimento, largura e ângulo
 
-Reproduzir: `npm run analise` (cerca de 7 min para as três análises). Código em `analysis/blade.test.ts`.
+Reproduzir: `npm run analise` (cerca de 7 min). Código em `analysis/blade.test.ts`.
 O Trator deixou de ser preset, mas continua como robô de teste (`tests/fixtures.ts`) com os mesmos valores.
 A análise dos presets atuais (Kunai, Tora, Fuji) está em [ANALISE-ROBOS.md](ANALISE-ROBOS.md).
 
@@ -37,12 +37,23 @@ A lâmina é uma rampa. Por isso, **altura = comprimento × sen(ângulo)** e **p
 | Largura, desalinhado 3 cm | 99 / 80 / 60 / 40 mm | 2 / 3 / 8 / 8 | 2–8/9 | 3 / 4 / 4 / 4 |
 | Largura na defesa (quina atacada) | 99 / 80 / 60 / 40 mm | 1 / 4 / 9 / 1 | — | 5 / 4 / 6 / 6 |
 
-## Kunai (2 rodas, cunha contínua): caótico
+## Kunai (2 rodas, cunha contínua)
 
-- **Torinaoshi:** continua travando em Torinaoshi com frequência, 3 a 9 em cada 9.
-- **Comprimento:** 15,4 mm fez 6/9; o resto ficou em 3–4/9.
-- **Ângulo:** 20° a 48° ficou em 3–4/9. A diferença do modelo antigo, em que 38–48° nunca entravam por baixo, sumiu.
-- **Largura:** 1 a 5/9, sem tendência.
+> Rodado de novo com o motor real do preset (JGA16-050 32:1, 375 RPM). Antes ele tinha 800 RPM e 2,4 kgf·cm, e a maioria das largadas terminava em Torinaoshi.
+
+| Variável | Variante | Pontos | Entra por baixo |
+|---|---|---|---|
+| Ângulo | 20° (original 28°; reprovado: a lâmina rouba chassi) | **9/9** | 9/9 |
+| Ângulo | 38° / 48° | 3/9 / 2/9 | 3/9 / 2/9 |
+| Comprimento | 10,2 / 15,4 mm | 4 / 2 | 4 / 2 |
+| Comprimento | 25,6 (original) / 35,8 / 46,1 mm | 6 / 6 / 6 | 6/9 |
+| Largura, frontal | 99 / 80 / 60 / 40 mm | **6** / 3 / 2 / **0** | 6 / 3 / 2 / 0 |
+| Largura, desalinhado 3 cm | 99 / 80 / 60 / 40 mm | 6 / 7 / 3 / 3 | 3–7/9 |
+| Largura na defesa (quina atacada) | 99 / 80 / 60 / 40 mm | 3 / 3 / 3 / 0 | — |
+
+**Com o motor real, o Kunai deixou de ser caótico:** quase não há Torinaoshi. Duas tendências aparecem:
+- **Ângulo:** rampa deitada entra por baixo (20° fez 9/9; 48° fez 2/9).
+- **Largura:** na cunha contínua, lâmina larga é melhor. Com 40 mm, a variante não entrou por baixo nenhuma vez.
 
 ## O que mudou com o novo modelo de roda
 
@@ -52,10 +63,10 @@ A lâmina é uma rampa. Por isso, **altura = comprimento × sen(ângulo)** e **p
 
 ## Conclusões práticas
 
-1. **Ângulo e aresta decidem quem entra por baixo.** É a alavanca mais forte e a única que se manteve nos dois modelos.
+1. **Ângulo e aresta decidem quem entra por baixo.** É a alavanca mais forte e a única que se manteve nos dois modelos, no Trator e no Kunai.
 2. **Não empinar no choque vale tanto quanto a lâmina.** CG à frente, partida suave e motor sem torque sobrando (ver [ANALISE-RODAS-MOTORES.md](ANALISE-RODAS-MOTORES.md)).
-3. **Comprimento e largura dependem do resto do robô.** Neste simulador, os resultados viraram quando a dinâmica da roda mudou. Teste no seu robô antes de tirar regra.
-4. **Cunha contínua de 2 rodas precisa de pilotagem** depois de levantar; senão o rival passa por cima.
+3. **Comprimento e largura dependem do resto do robô.** No Trator, os resultados viraram quando a dinâmica da roda mudou. Na cunha do Kunai, lâmina larga venceu com clareza. Teste no seu robô antes de tirar regra.
+4. **O motor muda o resultado da lâmina.** O Kunai com o motor antigo (800 RPM, 2,4 kgf·cm) travava em Torinaoshi; com o JGA16-050 real as tendências aparecem.
 
 ## Limitações
 
