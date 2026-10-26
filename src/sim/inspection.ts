@@ -3,6 +3,7 @@ import { theoreticalTopSpeed } from './drive';
 import { GRAVITY } from './arena';
 import type { RobotSpec } from './types';
 import { bladeDepth, bladeHeight } from './presets';
+import { MOTOR_DEFAULTS, WHEEL_DEFAULTS, wheelInertia, wheelMass } from './catalog';
 
 /**
  * "Caixa de inspeção" do Mini Sumô (500g) — Regulamento RoboCore Art. 4:
@@ -36,13 +37,39 @@ export interface InspectionResult {
     maxTraction: number; // N (μ·N nas rodas)
     motorForce: number; // N (soma do torque de travamento / raio)
     tractionLimited: boolean;
+    /** quanto o robô empina numa largada a 100% sem rampa (graus, estimativa) */
+    wheelieDeg: number;
   };
 }
 
 const mm = (v: number) => `${(v * 1000).toFixed(1)} mm`;
 
+/** Acima disso o editor avisa que o robô empina na largada */
+export const WHEELIE_WARN_DEG = 15;
+
+/**
+ * Estimativa de quanto o robô empina numa largada a 100% sem rampa. O motor acelera rotor
+ * e roda de 0 à rotação livre e devolve ao chassi o momento angular n·J·ω_livre; o chassi gira
+ * em torno do eixo de trás até o peso (m·g·d) segurar. θ ≈ (n·J·ω)² / (2·I·m·g·d).
+ * O simulador calcula isso de verdade; aqui é a conta de bolso para o editor.
+ */
+export function wheelieEstimate(spec: RobotSpec, geom = buildRobotGeometry(spec)): number {
+  if (!geom.wheels.length) return 0;
+  const rearX = Math.min(...geom.wheels.map((w) => w.x));
+  const d = spec.comX - rearX;
+  if (d <= 0) return 90;
+  const omega = (spec.motor.freeRpm * 2 * Math.PI) / 60;
+  const L = geom.wheels.length * wheelInertia(spec).total * omega;
+  const m = spec.mass;
+  const iCom = (m * (spec.length ** 2 + spec.height ** 2)) / 12;
+  const iPivot = iCom + m * (d * d + spec.comY * spec.comY);
+  const theta = (L * L) / (2 * iPivot * m * GRAVITY * d);
+  return Math.min(90, (theta * 180) / Math.PI);
+}
+
 export function inspect(spec: RobotSpec): InspectionResult {
   const geom = buildRobotGeometry(spec);
+  const wheelie = wheelieEstimate(spec, geom);
   const lengthOk = geom.bounds.maxX - geom.bounds.minX <= LIMITS.maxLength + 1e-9;
   const widthOk = geom.bounds.maxZ - geom.bounds.minZ <= LIMITS.maxWidth + 1e-9;
   const massOk = spec.mass <= LIMITS.maxMass + 1e-9;
@@ -60,6 +87,9 @@ export function inspect(spec: RobotSpec): InspectionResult {
     { id: 'mass', label: 'Massa ≤ 500 g', ok: massOk, detail: `${(spec.mass * 1000).toFixed(0)} g` },
     { id: 'com', label: 'Centro de massa dentro do robô', ok: comInside, detail: `x ${mm(spec.comX)}, y ${mm(spec.comY)}` },
     ...geom.notes.map((n, k) => ({ id: `nota${k}`, label: 'Aviso', ok: true, detail: n, note: true })),
+    ...(wheelie > WHEELIE_WARN_DEG
+      ? [{ id: 'empina', label: 'Aviso', ok: true, note: true, detail: `largada a 100% sem rampa pode empinar ~${Math.round(wheelie)}°: avance o CG ou use partida suave` }]
+      : []),
     {
       id: 'geom',
       label: 'Geometria construível',
@@ -83,6 +113,7 @@ export function inspect(spec: RobotSpec): InspectionResult {
       maxTraction,
       motorForce,
       tractionLimited: motorForce > maxTraction,
+      wheelieDeg: wheelie,
     },
   };
 }
@@ -125,9 +156,13 @@ export const PARAMS: ParamDef[] = [
   { key: 'wheelW', group: 'Rodas', label: 'Largura do pneu', unit: 'mm', min: 5, max: 25, step: 0.5, toUi: (s) => m2mm(s.wheels.width), apply: (s, v) => (s.wheels.width = mm2m(v)) },
   { key: 'wheelCover', group: 'Rodas', kind: 'toggle', label: 'Rodas embutidas', unit: '', min: 0, max: 1, step: 1, toUi: (s) => (s.wheels.covered === false ? 0 : 1), apply: (s, v) => (s.wheels.covered = v >= 0.5), hint: 'Chassi envolve as rodas com caixas de roda em arco' },
   { key: 'wellGap', group: 'Rodas', label: 'Folga da caixa de roda', unit: 'mm', min: 0.5, max: 6, step: 0.5, toUi: (s) => m2mm(s.wheels.wellGap ?? 0.002), apply: (s, v) => (s.wheels.wellGap = mm2m(v)), hint: 'Espaço entre o pneu e a chassi' },
-  { key: 'wheelMu', group: 'Rodas', label: 'Atrito do pneu', unit: 'μ', min: 0.4, max: 1.6, step: 0.01, toUi: (s) => s.wheels.friction, apply: (s, v) => (s.wheels.friction = v), hint: 'Silicone limpo na fórmica ≈ 1,0–1,3' },
-  { key: 'rpm', group: 'Motor', label: 'Rotação livre', unit: 'RPM', min: 100, max: 2000, step: 10, toUi: (s) => s.motor.freeRpm, apply: (s, v) => (s.motor.freeRpm = v) },
-  { key: 'stall', group: 'Motor', label: 'Torque de travamento', unit: 'kgf·cm', min: 0.3, max: 10, step: 0.1, toUi: (s) => +(s.motor.stallTorque / 0.0980665).toFixed(2), apply: (s, v) => (s.motor.stallTorque = v * 0.0980665), hint: 'Por motor (1 motor por roda)' },
+  { key: 'wheelMu', group: 'Rodas', label: 'Atrito do pneu (pico)', unit: 'μ', min: 0.3, max: 1.6, step: 0.01, toUi: (s) => s.wheels.friction, apply: (s, v) => (s.wheels.friction = v), hint: 'Aderência máxima antes de patinar. Silicone 20 Shore A em madeira laminada ≈ 0,75' },
+  { key: 'slipPeak', group: 'Rodas', label: 'Escorregamento no pico', unit: '%', min: 3, max: 40, step: 0.5, toUi: (s) => +((s.wheels.slipPeak ?? WHEEL_DEFAULTS.slipPeak) * 100).toFixed(2), apply: (s, v) => (s.wheels.slipPeak = v / 100), hint: 'Pneu macio chega ao pico com mais escorregamento' },
+  { key: 'slideRatio', group: 'Rodas', label: 'Atrito patinando', unit: '%', min: 40, max: 100, step: 1, toUi: (s) => Math.round((s.wheels.slideRatio ?? WHEEL_DEFAULTS.slideRatio) * 100), apply: (s, v) => (s.wheels.slideRatio = v / 100), hint: '% do atrito de pico que sobra com a roda patinando' },
+  { key: 'wheelMass', group: 'Rodas', label: 'Massa de cada roda', unit: 'g', min: 2, max: 60, step: 0.5, toUi: (s) => +(wheelMass(s) * 1000).toFixed(2), apply: (s, v) => (s.wheels.mass = v / 1000), hint: 'Cubo + pneu (inércia da roda)' },
+  { key: 'rpm', group: 'Motor', label: 'Rotação livre', unit: 'RPM', min: 100, max: 3500, step: 10, toUi: (s) => s.motor.freeRpm, apply: (s, v) => (s.motor.freeRpm = v) },
+  { key: 'stall', group: 'Motor', label: 'Torque de travamento', unit: 'kgf·cm', min: 0.1, max: 10, step: 0.01, toUi: (s) => +(s.motor.stallTorque / 0.0980665).toFixed(2), apply: (s, v) => (s.motor.stallTorque = v * 0.0980665), hint: 'Por motor (1 motor por roda)' },
+  { key: 'motorTau', group: 'Motor', label: 'Constante de tempo', unit: 'ms', min: 1, max: 60, step: 0.5, toUi: (s) => +((s.motor.timeConstant ?? MOTOR_DEFAULTS.timeConstant) * 1000).toFixed(2), apply: (s, v) => (s.motor.timeConstant = v / 1000), hint: 'Roda no ar até 63% da rotação livre (inércia do rotor). Meça filmando em câmera lenta' },
   { key: 'mass', group: 'Massa', label: 'Massa', unit: 'g', min: 150, max: 600, step: 1, toUi: (s) => Math.round(s.mass * 1000), apply: (s, v) => (s.mass = v / 1000), hint: 'Limite 500 g' },
   { key: 'comX', group: 'Massa', label: 'CG (frente/trás)', unit: 'mm', min: -45, max: 45, step: 0.5, toUi: (s) => m2mm(s.comX), apply: (s, v) => (s.comX = mm2m(v)), hint: '+ = para a frente' },
   { key: 'comY', group: 'Massa', label: 'CG (altura)', unit: 'mm', min: 3, max: 60, step: 0.5, toUi: (s) => m2mm(s.comY), apply: (s, v) => (s.comY = mm2m(v)) },

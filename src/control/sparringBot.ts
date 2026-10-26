@@ -5,6 +5,9 @@ import { clamp, wrapAngle } from '../sim/math';
 
 export type BotLevel = 'facil' | 'medio' | 'dificil';
 
+/** PWM por segundo — o mesmo do teclado no modo realista */
+const SOFT_START_RATE = 14;
+
 const LEVELS: Record<BotLevel, { speed: number; reaction: number; aimGain: number; label: string }> = {
   facil: { speed: 0.55, reaction: 0.35, aimGain: 2.0, label: 'Bot fácil' },
   medio: { speed: 0.8, reaction: 0.18, aimGain: 3.0, label: 'Bot médio' },
@@ -23,6 +26,8 @@ export class SparringBot implements Controller {
   private fightTime = 0;
   private seen = { x: 0, z: 0 };
   private seenAge = 1e9;
+  /** saída suavizada (partida suave): motor real com inércia empina se receber 100% de uma vez */
+  private out = { left: 0, right: 0 };
 
   constructor(level: BotLevel = 'medio') {
     this.cfg = LEVELS[level];
@@ -35,9 +40,13 @@ export class SparringBot implements Controller {
       frame.ready = true;
       this.fightTime = 0;
       this.seenAge = 1e9;
+      this.out = { left: 0, right: 0 };
       return frame;
     }
-    if (ctx.phase !== 'fight' && ctx.phase !== 'deciding') return frame;
+    if (ctx.phase !== 'fight' && ctx.phase !== 'deciding') {
+      this.out = { left: 0, right: 0 };
+      return frame;
+    }
     this.fightTime += ctx.dt;
     if (this.fightTime < this.cfg.reaction) return frame;
 
@@ -66,8 +75,13 @@ export class SparringBot implements Controller {
     }
     throttle *= this.cfg.speed;
     turn *= Math.max(0.5, this.cfg.speed);
-    frame.drive.left = clamp(throttle - turn, -1, 1);
-    frame.drive.right = clamp(throttle + turn, -1, 1);
+    // partida suave como a do teclado no modo realista (0 → 100% em ~70 ms)
+    const step = SOFT_START_RATE * ctx.dt;
+    const ramp = (cur: number, target: number) => cur + clamp(target - cur, -step, step);
+    this.out.left = ramp(this.out.left, clamp(throttle - turn, -1, 1));
+    this.out.right = ramp(this.out.right, clamp(throttle + turn, -1, 1));
+    frame.drive.left = this.out.left;
+    frame.drive.right = this.out.right;
     return frame;
   }
 }

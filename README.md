@@ -9,8 +9,8 @@ Requer Node 20+.
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # 102 testes: física, juiz, presets, partidas bot × bot, sorteio, determinismo
-npm run analise      # lâmina (docs/ANALISE-LAMINA.md) e presets (docs/ANALISE-ROBOS.md)
+npm test             # 126 testes: física, roda, juiz, presets, evidência, partidas bot × bot, sorteio, determinismo
+npm run analise      # lâmina, presets, motores e rodas (docs/ANALISE-*.md), ~7 min
 npm run build        # dist/ para hospedar
 npm run build:single # dist-single/index.html — um arquivo só, abre direto no navegador
 ```
@@ -38,7 +38,8 @@ Com **Posicionamento aleatório** ligado no menu, cada round sorteia posição e
   - **Realista**: tempo real, e mexer antes do bip é Keikoku.
   - **Arcade**: a mesma física a 50% da velocidade.
 - **Robôs:** três presets (Kunai, Tora e Fuji) e um editor. O editor valida a caixa de inspeção (100 mm, 500 g) e mostra velocidade, peso nas rodas e tração.
-- **Física:** a tração de cada roda é limitada por μ·N. Quando a lâmina do rival entra por baixo, N cai e o robô perde força. Ligue o debug (F2) para ver.
+- **Física:** cada roda tem inércia (roda + rotor pela redução) e atrito que depende do escorregamento: patina, trava e faz o robô empinar se o motor sobrar. Quando a lâmina do rival entra por baixo, N cai e o robô perde força. Ligue o debug (F2) para ver.
+- **Peças reais:** o editor tem presets de motor (N20, N30, JGA16-050) e de roda (RoboCore StickyMAX S20/S30).
 
 - **Som:** motores e batidas de contato sintetizados no navegador; volume no menu.
 - **Evidência:** quando um robô encosta fora, o replay congela no toque e aproxima a câmera do ponto.

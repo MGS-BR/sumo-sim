@@ -156,11 +156,13 @@ export class Game {
     const phase = m.ref.s.phase;
     if (!this.rp) {
       this.view.applySnapshot(s);
-      // marca ao vivo onde o primeiro robô encostou fora (fica até o próximo posicionamento)
-      const touch = this.firstTouch();
+      // marca ao vivo onde o robô encostou fora (fica até o próximo posicionamento).
+      // Decidindo: o primeiro toque. Depois do Yuko: o toque de QUEM PERDEU (o mesmo do replay);
+      // antes mostrava sempre o primeiro toque, que na iniciativa (Art. 13) pode ser do vencedor.
+      const touch = phase === 'deciding' ? this.firstTouch()?.touch : this.evidence?.touch;
       // depois do replay de evidência a marca não volta (o robô já está em outro lugar)
       const live = (phase === 'deciding' || phase === 'point' || phase === 'over') && !this.evidenceReplayed;
-      this.view.setEvidence(touch && live ? touch.touch.point : null);
+      this.view.setEvidence(touch && live ? touch.point : null);
     }
     const focus = this.rp?.focus ?? {
       x: (s.robots[0].position.x + s.robots[1].position.x) / 2,
@@ -226,6 +228,7 @@ export class Game {
           if (e.phase !== 'placement') this.mouse?.cancel();
           if (e.phase === 'placement') {
             this.evidenceReplayed = false;
+            this.evidence = null;
             this.keys.clearPressed();
             this.updateHelp();
           }

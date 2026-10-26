@@ -1,0 +1,208 @@
+# Rodas e motores — pesquisa, modelo e análise
+
+Reproduzir: `npm run analise` (cerca de 7 min para as três análises). Código em `analysis/wheels.test.ts`.
+
+## 1. Presets de motor
+
+Valores das folhas de dados dos fabricantes, no eixo de saída e na tensão nominal. No editor ficam em **Motor → Motor do catálogo**.
+
+### N20
+
+O formato N20 (redução de 10 × 12 mm) não tem uma folha de dados única. Por isso há duas linhas:
+
+**N20 HP 6 V** ([Pololu HP 6V](https://www.pololu.com/product/2217); a Pololu diz que este formato "também é chamado de N20"):
+
+| Redução | Rotação livre | Travamento |
+|---|---|---|
+| 10:1 | 3100 RPM | 0,22 kgf·cm |
+| 15:1 | 2000 RPM | 0,30 kgf·cm |
+| 30:1 | 1000 RPM | 0,57 kgf·cm |
+| 50:1 | 590 RPM | 0,86 kgf·cm |
+| 75:1 | 410 RPM | 1,3 kgf·cm |
+| 100:1 | 310 RPM | 1,7 kgf·cm |
+| 150:1 | 210 RPM | 2,4 kgf·cm |
+| 210:1 | 150 RPM | 3,0 kgf·cm |
+
+- Corrente de travamento: 1,6 A. Massa: 9,5 g ([ficha](https://www.pololu.com/product/1000/specs)).
+- A Pololu recomenda não passar de 2 kgf·cm instantâneos na redução, exceto nas de 380:1 e 1000:1.
+
+**N20 comum (MP) 6 V** (linha MP da mesma página):
+
+| Redução | Rotação livre | Travamento |
+|---|---|---|
+| 30:1 | 720 RPM | 0,33 kgf·cm |
+| 50:1 | 420 RPM | 0,54 kgf·cm |
+| 100:1 | 220 RPM | 0,94 kgf·cm |
+| 150:1 | 150 RPM | 1,3 kgf·cm |
+
+- Corrente de travamento: 0,67 A.
+- Representa o N20 genérico: o GA12-N20 da [Handsontec](https://www.handsontec.com/dataspecs/motor_fan/GA12-N20.pdf) também trava com 0,67 A. Os pontos 450 RPM/0,54 kgf·cm e 200 RPM/0,94 kgf·cm dele batem com o 50:1 e o 100:1 desta linha.
+
+### N30
+
+**N30 12 V** ([NFP-GM12-N30-1216](https://nfpmotor.com/12mm-metal-gear-motor-model-nfp-gm12-n30), motor de 16 000 RPM):
+
+| Redução | Rotação livre | Travamento |
+|---|---|---|
+| 10:1 | 1600 RPM | 0,3 kgf·cm |
+| 20:1 | 800 RPM | 0,6 kgf·cm |
+| 30:1 | 530 RPM | 1,0 kgf·cm |
+| 50:1 | 320 RPM | 1,6 kgf·cm |
+| 100:1 | 160 RPM | 3,0 kgf·cm |
+
+- Corrente de travamento: 0,6 A.
+
+**N30 5 V** ([KS-GM12-N30](https://www.motormicro.com/product/12-20mm-n30-gear-motor-5-12v-dc-10200-17000rpm-gearbox-27-567rpm-d-shaft-ks-gm12-n30), motor de 17 000 RPM):
+
+| Redução | Rotação livre | Travamento |
+|---|---|---|
+| 30:1 | 567 RPM | 0,60 kgf·cm |
+| 50:1 | 340 RPM | 0,85 kgf·cm |
+| 100:1 | 170 RPM | 1,70 kgf·cm |
+| 150:1 | 113 RPM | 2,13 kgf·cm |
+
+- Corrente de travamento: 1,3 A.
+
+**Observações sobre o N30:**
+- O fabricante marca os valores como provisórios.
+- Massa: ~12 g, estimativa. A ficha não dá; a versão em U pesa ~15 g ([NFP-GM1024-N30](https://nfpmotor.com/12mm-6v-12v-n30-dc-gear-motor-for-robotics-model-nfp-gm1024-n30)).
+
+### JGA16-050
+
+**JGA16-050 6 V** ([NFP-JGA16-050-06120](https://microdcmotors.com/product/6v-12v-micro-metal-gearmotor-model-nfp-gm16-050sh)):
+
+| Redução | Rotação livre | Travamento |
+|---|---|---|
+| 13:1 | 923 RPM | 0,37 kgf·cm |
+| 16:1 | 750 RPM | 0,46 kgf·cm |
+| 25:1 | 480 RPM | 0,65 kgf·cm |
+| 32:1 | 375 RPM | 0,83 kgf·cm |
+| 45:1 | 266 RPM | 1,0 kgf·cm |
+| 63:1 | 190 RPM | 1,4 kgf·cm |
+| 100:1 | 120 RPM | 2,3 kgf·cm |
+
+- Corrente de travamento: 2 A. Massa: ~30 g.
+- A versão de 12 V tem a mesma rotação e o mesmo torque, com metade da corrente.
+
+**Atenção a anúncios:** lojas anunciam o JGA16-050 com "torque 0,53–5 kg·cm" ([exemplo](https://othoba.com/dc-6v-600rpm-micro-metal-gear-motor-jga16-050-udvabony-bd-474494)). Essa é a faixa da FAMÍLIA inteira, das reduções mais baixas às mais altas, e não de um motor. A ~600 RPM, o travamento real fica perto de 0,5 kgf·cm.
+
+## 2. Presets de roda (RoboCore StickyMAX 32 mm)
+
+| | S20 macia | S30 dura |
+|---|---|---|
+| Diâmetro × largura | 32 × 21 mm | 32 × 21 mm |
+| Pneu | silicone vulcanizado 20 Shore A, "pegajosa" | silicone 30 Shore A, "seca" |
+| Cubo | alumínio 6351-T6, Ø25 mm, 12 g, furo de 3 mm | idem |
+| Massa da roda | 23 g | 23 g |
+| μ de pico usado | **0,75** | **0,55** |
+| Escorregamento no pico | 15% | 10% |
+
+Fontes: [pneus S20](https://www.robocore.net/roda/pneus-s20-32mm-para-roda-stickymax-par), [roda S20](https://www.robocore.net/roda/roda-stickymax-s20-32mm), [roda S30](https://www.robocore.net/roda/roda-stickymax-s30-32mm) e [cubo](https://www.robocore.net/roda/cubo-roda-stickymax-32mm).
+
+**Atrito:**
+- A RoboCore não publica o coeficiente de atrito; o próprio fórum dela diz que não tem como medir.
+- O μ veio do [teste da JSumo em madeira laminada](https://blog.jsumo.com/wheel-report-2015-our-wheels-slt20-slt20p-against-to-banebots-fingertech-wheels/), o mesmo acabamento do dohyo: silicone 20 Shore A deu 0,70–0,75 e 30 Shore A deu 0,55.
+- O escorregamento no pico é estimativa: a borracha mais macia deforma mais antes de deslizar.
+- **É bem menos que o 1,1 dos presets atuais.** Vale medir o seu pneu na sua arena: incline a arena até o robô escorregar; μ = tan(ângulo).
+
+## 3. O novo modelo de roda
+
+O modelo antigo não tinha inércia da roda nem curva de atrito por escorregamento.
+
+**O que mudou:**
+- **Inércia de rotação:** a roda tem rotação própria, que persiste entre passos.
+  - A inércia J soma a da roda (≈ 0,55·m·r²) e a do rotor refletida pela redução, que cresce com o quadrado da redução.
+  - É calculada pela constante de tempo mecânica: J = τ·T_travamento/ω_livre.
+- **Curva de atrito × escorregamento:**
+  - Escorregamento: κ = (ω·r − v)/máx(|ω·r|, |v|, 5 cm/s). O lateral é tratado do mesmo jeito.
+  - Curva (Pacejka simplificada): μ(σ) = μ_pico·sen(C·atan(B·σ)). Sobe até o pico e cai para 85% do pico patinando.
+  - A roda pode patinar na largada, travar arrastada, ou continuar girando no ar.
+- **Reação no chassi:** o motor que acelera o rotor empurra o chassi ao contrário. É isso que faz robô empinar.
+- **Integração:** a força de cada passo resolve F = F_pneu(κ(F)) com a rotação e a velocidade do fim do passo (Euler implícito, por bisseção). Fica estável com qualquer inércia, de 1e-7 a 5e-4 kg·m², e determinística.
+- **Constante de tempo τ:**
+  - Não vem nas folhas de dados. Foi estimada pelo tamanho do rotor: N20 ≈ 13–18 ms, N30 ≈ 8–10 ms, JGA16-050 ≈ 19 ms; padrão para motor livre: 15 ms.
+  - Dá para medir em casa: filme a roda solta em câmera lenta. τ é o tempo para chegar a 63% da rotação máxima.
+
+**Validação:** testes unitários em `tests/wheel.test.ts`, fora a física completa:
+- a força nunca passa de μ·N;
+- a roda solta chega a 63% da rotação em t = τ;
+- na rotação livre o motor não empurra;
+- a largada patina;
+- a roda segura com o motor em freio;
+- sem drift parado;
+- a velocidade final é estável;
+- é determinística.
+
+## 4. Resultados
+
+### Motores no mesmo robô
+
+Robô de referência: corpo do Fuji, CG −15,5 mm, roda S20.
+
+| Motor | Vel. máx. | Força motores / tração | 20 cm em | Empina (suave / seca) |
+|---|---|---|---|---|
+| N20 HP 30:1 | 1,68 m/s | 7,0 / 2,8 N | 0,28 s | 2° / 4° |
+| N20 HP 50:1 | 0,99 m/s | 10,5 / 2,8 N | 0,31 s | 4° / 12° |
+| N20 HP 100:1 | 0,52 m/s | 20,8 / 2,8 N | 0,46 s | 7° / 16° |
+| N20 HP 210:1 | 0,25 m/s | 36,8 / 2,8 N | 0,88 s | 14° / 19° |
+| N20 MP 50:1 | 0,70 m/s | 6,6 / 2,8 N | 0,41 s | 0° / 2° |
+| N30 12 V 30:1 | 0,89 m/s | 12,3 / 2,8 N | 0,32 s | 3° / 8° |
+| N30 12 V 100:1 | 0,27 m/s | 36,8 / 2,8 N | 0,81 s | 3° / 15° |
+| JGA16 25:1 | 0,80 m/s | 8,0 / 2,8 N | 0,36 s | 0° / 7° |
+| JGA16 45:1 | 0,45 m/s | 12,3 / 2,8 N | 0,54 s | 1° / 11° |
+| JGA16 100:1 | 0,20 m/s | 28,2 / 2,8 N | 1,09 s | 13° / 19° |
+
+**Leitura:**
+- **Tração manda:** todos os motores são mais fortes que a tração do pneu (μ·N ≈ 2,8 N), então torque a mais não empurra mais.
+- **Redução alta é lenta e empina:** quanto maior a redução, mais lento o robô e maior a inércia refletida (de 0,03 a 1,3 kg equivalentes por roda). Com isso o robô empina mais.
+- **Sobra pouco para 20 cm:** acima de ~1 m/s de velocidade máxima, os 20 cm iniciais já não melhoram (~0,3 s). A tração é que limita a aceleração.
+
+### S20 × S30
+
+Mesmo robô, N20 HP 50:1, 9 largadas de cada lado:
+
+| CG | S20 | S30 |
+|---|---|---|
+| −15,5 mm (como o Fuji) | 1 ponto | **17 pontos** |
+| +5 mm (20 mm mais à frente) | **4 pontos**, 14 Torinaoshi | 0 pontos |
+
+**Por que o S20 perde com o CG atrás:** mais aderência acelera mais, e com o CG atrás o nariz levanta ~3° e ~2 mm na hora do choque. A lâmina do rival (aresta a 0,2 mm) entra por baixo. Com o CG à frente o nariz não levanta, e o S20 deixa de perder: venceu 4 pontos e não cedeu nenhum.
+
+**Em resumo:** aderência só ajuda se o robô não empina.
+
+### Motores frente a frente
+
+Roda S20, 18 largadas por par. Venceu mais quem empina menos no choque, não quem tem mais torque:
+
+| Par | Placar |
+|---|---|
+| N20 MP 50:1 × N20 HP 50:1 | 15–0 |
+| JGA16 25:1 × N30 12 V 30:1 | 18–0 |
+| JGA16 45:1 × N20 HP 100:1 | 14–3 |
+| JGA16 45:1 × N20 MP 50:1 | 11–3 |
+
+Com a lâmina igual dos dois lados, o lado que levanta o nariz perde a disputa de lâminas.
+
+## 5. Tora e Fuji com o novo modelo
+
+Os motores do Tora (670 RPM, 4,4 kgf·cm) e do Fuji (400 RPM, 3,7 kgf·cm) são **5 a 10 vezes mais fortes** que qualquer N20, N30 ou JGA16-050 da mesma rotação. O JGA16-050 a ~480–750 RPM trava com 0,46–0,65 kgf·cm.
+
+**Consequências no simulador:**
+- **Tora:**
+  - com partida suave, empina ~42° na largada;
+  - numa largada seca (0 → 100% num passo), fica em pé;
+  - ao soltar o comando vindo de ré a 100%, pode capotar.
+- **Fuji:** empina ~23° com partida suave e ~33° na largada seca.
+- **Estimativa do editor:** o editor estima isso e mostra um aviso a partir de 15°.
+
+Os presets ficaram com os valores enviados. Se o motor real for um JGA16-050 ou um N20, escolha o preset do catálogo no editor e o robô deixa de empinar. No teste, o Tora com JGA16 25:1 e roda S20 inclinou menos de 15° mesmo na largada e na inversão secas.
+
+## Limitações
+
+- **τ estimado:** é o parâmetro mais incerto e muda muito o quanto o robô empina. Meça o seu motor.
+- **μ de um único teste:** o atrito vem de um teste só (JSumo), e o escorregamento no pico é estimativa.
+- **Fora do modelo:**
+  - a queda de tensão da bateria e o limite de corrente do driver;
+  - a folga e a elasticidade da redução;
+  - o limite de 2 kgf·cm instantâneos da redução N20 (Pololu).
+- **Massa dos motores:** é informativa. A massa do robô continua sendo a que você define.

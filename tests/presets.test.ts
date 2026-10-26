@@ -5,7 +5,9 @@ import { loadRapier, SumoWorld } from '../src/sim/physics';
 import { PHYSICS_HZ } from '../src/sim/modes';
 import { resolveSlots } from '../src/ui/storage';
 import type { Quat } from '../src/sim/types';
-import { robot } from './fixtures';
+import { robot, softStart } from './fixtures';
+import { applyMotorPreset, applyTirePreset } from '../src/sim/catalog';
+import type { RobotSpec } from '../src/sim/types';
 
 /** Valores lidos no editor nas imagens enviadas (unidades da interface). */
 const FROM_SCREENSHOTS: Record<string, Record<string, number>> = {
@@ -43,7 +45,12 @@ describe('lista de presets', () => {
 
   it.each(Object.keys(FROM_SCREENSHOTS))('%s: cada valor do editor bate com a imagem enviada', (id) => {
     const spec = robot(id);
-    for (const p of PARAMS) expect(p.toUi(spec), `${id}.${p.key}`).toBeCloseTo(FROM_SCREENSHOTS[id][p.key], 2);
+    // só os campos que aparecem nas imagens (os novos campos do pneu e do motor não existiam lá)
+    for (const [key, value] of Object.entries(FROM_SCREENSHOTS[id])) {
+      const p = PARAMS.find((q) => q.key === key)!;
+      expect(p, key).toBeDefined();
+      expect(p.toUi(spec), `${id}.${key}`).toBeCloseTo(value, 2);
+    }
   });
 
   it('cores: Tora laranja, Fuji roxo (pneus como nas imagens)', () => {
@@ -66,23 +73,65 @@ describe('lista de presets', () => {
 describe('Tora e Fuji na física', () => {
   const pitch = (q: Quat) => (Math.asin(Math.max(-1, Math.min(1, 2 * (q.x * q.y + q.w * q.z)))) * 180) / Math.PI;
 
-  it.each([['tora'], ['fuji']])('%s: não empina nem afunda o nariz ao arrancar e inverter a 100%%', async (id) => {
+  const launch = async (spec: RobotSpec, phases: [seconds: number, target: number][]) => {
     const R = await loadRapier();
-    const w = new SumoWorld(R, [robot(id), robot('bloco')]);
+    const w = new SumoWorld(R, [spec, robot('bloco')]);
     w.setPose(0, { x: -0.3, z: 0, yaw: 0 });
     w.setPose(1, { x: 0.3, z: 0.3, yaw: 0 });
-    const run = (s: number, f: () => void = () => {}) => { for (let i = 0; i < s * PHYSICS_HZ; i++) { w.step(); f(); } };
-    run(0.4);
-    let lo = 0, hi = 0;
-    const track = () => { const p = pitch(w.robotState(0).rotation); lo = Math.min(lo, p); hi = Math.max(hi, p); };
-    w.setCommand(0, { left: 1, right: 1 });
-    run(0.5, track);
-    w.setCommand(0, { left: -1, right: -1 });
-    run(0.3, track);
-    expect(hi).toBeLessThan(3);
-    expect(lo).toBeGreaterThan(-3);
-    expect(w.robotState(0).wheels.every((wh) => wh.load > 0)).toBe(true);
+    const ramp = softStart();
+    let hi = 0;
+    let lo = 0;
+    for (const [sec, target] of phases)
+      for (let i = 0; i < sec * PHYSICS_HZ; i++) {
+        const u = ramp(target);
+        w.setCommand(0, { left: u, right: u });
+        w.step();
+        const p = pitch(w.robotState(0).rotation);
+        hi = Math.max(hi, p);
+        lo = Math.min(lo, p);
+      }
+    const end = w.robotState(0);
     w.dispose();
+    return { hi, lo, end };
+  };
+
+  it.each(PRESETS.map((p) => [p.id]))('%s: com partida suave pode empinar na largada, mas não capota e volta às rodas', async (id) => {
+    const { hi, end } = await launch(robot(id), [[0.3, 0], [0.8, 1]]);
+    expect(hi).toBeLessThan(60);
+    expect(Math.abs(pitch(end.rotation))).toBeLessThan(3);
+    expect(end.wheels.every((wh) => wh.load > 0)).toBe(true);
+  });
+
+  it('frear de ré a 100%: mais inércia no rotor (τ maior) empina mais — é a reação no chassi', async () => {
+    const run = (tau: number) => {
+      const s = robot('tora');
+      s.motor.timeConstant = tau;
+      return launch(s, [[0.3, 0], [0.6, -1], [0.5, 0]]);
+    };
+    const small = await run(0.002);
+    const big = await run(0.015);
+    expect(big.hi).toBeGreaterThan(small.hi + 10);
+  });
+
+  it('o mesmo robô com motor e roda reais do catálogo empina pouco mesmo com largada e inversão secas', async () => {
+    const s = robot('tora');
+    applyMotorPreset(s, 'jga16-6-25');
+    applyTirePreset(s, 'stickymax-s20');
+    s.width = 0.099;
+    const R = await loadRapier();
+    const w = new SumoWorld(R, [s, robot('bloco')]);
+    w.setPose(0, { x: -0.3, z: 0, yaw: 0 });
+    w.setPose(1, { x: 0.3, z: 0.3, yaw: 0 });
+    let hi = 0;
+    for (let i = 0; i < 0.2 * PHYSICS_HZ; i++) w.step();
+    for (const u of [1, -1, 0])
+      for (let i = 0; i < 0.5 * PHYSICS_HZ; i++) {
+        w.setCommand(0, { left: u, right: u });
+        w.step();
+        hi = Math.max(hi, Math.abs(pitch(w.robotState(0).rotation)));
+      }
+    w.dispose();
+    expect(hi).toBeLessThan(15);
   });
 });
 

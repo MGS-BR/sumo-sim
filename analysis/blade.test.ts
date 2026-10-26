@@ -4,7 +4,7 @@
  */
 import { it } from 'vitest';
 import { loadRapier, SumoWorld } from '../src/sim/physics';
-import { robot as clonePreset } from '../tests/fixtures';
+import { robot as clonePreset, softStart } from '../tests/fixtures';
 import { inspect } from '../src/sim/inspection';
 import { MODES, PHYSICS_HZ } from '../src/sim/modes';
 import { Match } from '../src/sim/match';
@@ -25,11 +25,15 @@ function duel(R: R, att: RobotSpec, vic: RobotSpec, z: number, yaw: number, vz: 
   const tVic = { x: 0.06 + vic.length / 2 + 0.003, z: vz, yaw: Math.PI };
   m.step([{ ...EMPTY_FRAME, placeTarget: tVic }, { ...EMPTY_FRAME, placeTarget: tAtt }]);
   m.step([{ ...EMPTY_FRAME, ready: true }, { ...EMPTY_FRAME, ready: true }]);
-  const go: ControlFrame = { ...EMPTY_FRAME, drive: { left: 1, right: 1 } };
+  // partida suave (rampa de PWM como o teclado no realista e o bot): com a inércia do rotor,
+  // 0 → 100% num passo faz robô de motor forte empinar, e a análise mediria só isso
+  const ramp = softStart();
   let win = -1, t = 0, first = -1, vlEarly = 0, alEarly = 0, ne = 0, vl = 0, al = 0, n = 0, lift = 0;
   for (let i = 0; i < PHYSICS_HZ * 12 && win < 0; i++) {
     const live = m.ref.s.phase === 'fight' || m.ref.s.phase === 'deciding';
-    const ev = m.step(live ? [go, go] : [EMPTY_FRAME, EMPTY_FRAME]);
+    const u = live ? ramp(1) : 0;
+    const go: ControlFrame = { ...EMPTY_FRAME, drive: { left: u, right: u } };
+    const ev = m.step([go, go]);
     const s = m.lastSnapshot;
     if (live && s.inContact) {
       if (first < 0) first = s.time;

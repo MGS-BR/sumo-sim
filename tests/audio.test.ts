@@ -11,7 +11,7 @@ const robot = (u: number, ratio: number, freeOmega = free): RobotState => ({
   linvel: { x: 0, y: 0, z: 0 },
   angvel: { x: 0, y: 0, z: 0 },
   yaw: 0,
-  wheels: Array.from({ length: 4 }, () => ({ load: 1, traction: 0, lateral: 0, slipping: false, spin: 0, omega: ratio * freeOmega, contact: null, onOutsideFloor: false, overEdge: false })),
+  wheels: Array.from({ length: 4 }, () => ({ load: 1, traction: 0, lateral: 0, slipping: false, slip: 0, spin: 0, omega: ratio * freeOmega, contact: null, onOutsideFloor: false, overEdge: false })),
   wheelLoadRatio: 1,
   touchingOutside: false,
   outsidePoint: null,

@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { loadRapier, SumoWorld } from '../src/sim/physics';
 import { PRESETS } from '../src/sim/presets';
-import { robot } from './fixtures';
+import { robot, softStart } from './fixtures';
 import { inspect } from '../src/sim/inspection';
-import { theoreticalTopSpeed, wheelForces } from '../src/sim/drive';
+import { theoreticalTopSpeed } from '../src/sim/drive';
 import { PHYSICS_HZ } from '../src/sim/modes';
 import { ARENA } from '../src/sim/arena';
 import { constrainPlacement, defaultPlacement, footprint, nudgePlacement, placementIssue, PLACEMENT_LINE_X } from '../src/sim/placement';
@@ -48,22 +48,6 @@ describe('caixa de inspeção (Art. 4)', () => {
   });
 });
 
-describe('modelo de pneu', () => {
-  const base = { u: 1, load: 1.2, vLong: 0, vLat: 0, radius: 0.015, freeOmega: 42, stallTorque: 0.36, muStatic: 1, muKinetic: 0.85, effMass: 0.125, dt: 1 / 480 };
-  it('força limitada por μ·N', () => {
-    const o = wheelForces(base);
-    expect(o.slipping).toBe(true);
-    expect(Math.abs(o.fLong)).toBeLessThanOrEqual(1.2 * 0.85 + 1e-9);
-  });
-  it('sem carga não há força (roda no ar)', () => {
-    expect(wheelForces({ ...base, load: 0 }).fLong).toBe(0);
-  });
-  it('na velocidade livre o motor não empurra mais', () => {
-    const vFree = 42 * 0.015;
-    expect(Math.abs(wheelForces({ ...base, vLong: vFree }).fLong)).toBeLessThan(0.05);
-  });
-});
-
 describe('física do robô', () => {
   it.each(PRESETS.map((p) => [p.id] as const))('%s: fica estável parado e atinge a velocidade de projeto', (id) => {
     const w = new SumoWorld(R, [robot(id), robot('bloco')]);
@@ -74,13 +58,23 @@ describe('física do robô', () => {
     expect(rest.position.y).toBeGreaterThan(ARENA.dohyoHeight - 0.001);
     expect(rest.position.y).toBeLessThan(ARENA.dohyoHeight + 0.001);
     expect(Math.hypot(rest.linvel.x, rest.linvel.z)).toBeLessThan(0.01);
-    w.setCommand(0, { left: 1, right: 1 });
-    let vmax = 0;
-    steps(w, 0.4, () => (vmax = Math.max(vmax, w.robotState(0).linvel.x)));
+    const ramp = softStart();
+    // velocidade em regime: média dos últimos 0,15 s (a do centro de massa oscila se o robô empinar na largada)
+    let sum = 0;
+    let n = 0;
+    let k = 0;
+    steps(w, 0.6, () => {
+      const u = ramp(1);
+      w.setCommand(0, { left: u, right: u });
+      if (++k > 0.45 * PHYSICS_HZ) {
+        sum += w.robotState(0).linvel.x;
+        n++;
+      }
+    });
     const spec = w.robots[0].spec;
     const vt = theoreticalTopSpeed(spec.motor.freeRpm, spec.wheels.radius);
-    expect(vmax).toBeGreaterThan(vt * 0.9);
-    expect(vmax).toBeLessThan(vt * 1.05);
+    expect(sum / n).toBeGreaterThan(vt * 0.9);
+    expect(sum / n).toBeLessThan(vt * 1.02);
     w.dispose();
   });
 
@@ -103,10 +97,12 @@ describe('física do robô', () => {
     far(w, 1);
     steps(w, 0.2);
     expect(w.robotState(0).touchingOutside).toBe(false);
-    w.setCommand(0, { left: 1, right: 1 });
+    const ramp = softStart();
     let outAt = -1;
     let overEdge = false;
     for (let i = 0; i < PHYSICS_HZ * 1.5 && outAt < 0; i++) {
+      const u = ramp(1);
+      w.setCommand(0, { left: u, right: u });
       w.step();
       const s = w.robotState(0);
       if (s.wheels.some((wh) => wh.overEdge)) overEdge = true;
@@ -147,13 +143,15 @@ describe('física do robô', () => {
     w.setPose(0, { x: -0.12, z: 0, yaw: 0 });
     w.setPose(1, { x: 0.12, z: 0, yaw: Math.PI });
     steps(w, 0.3);
-    w.setCommand(0, { left: 1, right: 1 });
-    w.setCommand(1, { left: 1, right: 1 });
+    const ramp = softStart();
     let victimLoadSum = 0;
     let attackerLoadSum = 0;
     let n = 0;
     let firstOut = -1;
     steps(w, 2, () => {
+      const u = ramp(1);
+      w.setCommand(0, { left: u, right: u });
+      w.setCommand(1, { left: u, right: u });
       const s = w.snapshot();
       if (s.inContact) {
         victimLoadSum += s.robots[1].wheelLoadRatio;

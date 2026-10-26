@@ -12,7 +12,7 @@ import { MODES, PHYSICS_DT, PHYSICS_HZ } from '../src/sim/modes';
 import { Match } from '../src/sim/match';
 import { SparringBot } from '../src/control/sparringBot';
 import { EMPTY_FRAME, type ControlFrame, type Quat, type RobotSpec } from '../src/sim/types';
-import { robot } from '../tests/fixtures';
+import { robot, softStart } from '../tests/fixtures';
 
 type R = Awaited<ReturnType<typeof loadRapier>>;
 
@@ -31,26 +31,37 @@ function solo(R: R, spec: RobotSpec) {
   run(0.4);
   const rest = w.robotState(0).wheelLoadRatio;
   const vt = theoreticalTopSpeed(spec.motor.freeRpm, spec.wheels.radius);
-  w.setCommand(0, { left: 1, right: 1 });
+  // largada com partida suave (como teclado/bot) e depois inversão para ré, também suave
+  const ramp = softStart();
   let t90 = -1, t = 0, dist = 0, t20 = -1, pitchUp = 0, pitchDown = 0;
   const x0 = w.robotState(0).position.x;
+  const track = () => {
+    const p = pitchDeg(w.robotState(0).rotation);
+    pitchUp = Math.max(pitchUp, p);
+    pitchDown = Math.min(pitchDown, p);
+  };
   run(0.6, () => {
+    const u = ramp(1);
+    w.setCommand(0, { left: u, right: u });
     t += PHYSICS_DT;
     const s = w.robotState(0);
     if (t90 < 0 && s.linvel.x >= 0.9 * vt) t90 = t;
     dist = s.position.x - x0;
     if (t20 < 0 && dist >= 0.2) t20 = t;
-    const p = pitchDeg(s.rotation);
-    pitchUp = Math.max(pitchUp, p);
-    pitchDown = Math.min(pitchDown, p);
+    track();
   });
-  // ré total em velocidade máxima (inversão brusca)
-  w.setCommand(0, { left: -1, right: -1 });
   run(0.3, () => {
-    const p = pitchDeg(w.robotState(0).rotation);
-    pitchUp = Math.max(pitchUp, p);
-    pitchDown = Math.min(pitchDown, p);
+    const u = ramp(-1);
+    w.setCommand(0, { left: u, right: u });
+    track();
   });
+  // largada seca: 0 → 100% num passo
+  w.setPose(0, { x: -0.3, z: 0, yaw: 0 });
+  w.setCommand(0, { left: 0, right: 0 });
+  run(0.3);
+  w.setCommand(0, { left: 1, right: 1 });
+  let dry = 0;
+  run(0.5, () => (dry = Math.max(dry, pitchDeg(w.robotState(0).rotation))));
   // giro no próprio eixo
   w.setPose(0, { x: -0.25, z: 0, yaw: 0 });
   w.setCommand(0, { left: 0, right: 0 });
@@ -68,7 +79,9 @@ function solo(R: R, spec: RobotSpec) {
     pesoNasRodas: rest.toFixed(2),
     tracaoN: ins.derived.maxTraction.toFixed(2),
     forcaMotorN: ins.derived.motorForce.toFixed(1),
-    nariz: `${pitchUp.toFixed(1)}° / ${pitchDown.toFixed(1)}°`,
+    narizSuave: `${pitchUp.toFixed(1)}° / ${pitchDown.toFixed(1)}°`,
+    empinaSeca: `${dry.toFixed(0)}°`,
+    estimativa: `${ins.derived.wheelieDeg.toFixed(0)}°`,
     giroRpm: ((yawRate * 60) / (2 * Math.PI)).toFixed(0),
   };
 }
@@ -81,11 +94,15 @@ function duel(R: R, a: RobotSpec, b: RobotSpec, dz: number, yaw: number): Duel {
   const tB = { x: 0.06 + b.length / 2 + 0.003, z: 0, yaw: Math.PI };
   m.step([{ ...EMPTY_FRAME, placeTarget: tB }, { ...EMPTY_FRAME, placeTarget: tA }]);
   m.step([{ ...EMPTY_FRAME, ready: true }, { ...EMPTY_FRAME, ready: true }]);
-  const go: ControlFrame = { ...EMPTY_FRAME, drive: { left: 1, right: 1 } };
+  // partida suave (rampa de PWM como o teclado no realista e o bot): com a inércia do rotor,
+  // 0 → 100% num passo faz robô de motor forte empinar, e a análise mediria só isso
+  const ramp = softStart();
   let win = -1, first = -1, la = 0, lb = 0, n = 0;
   for (let i = 0; i < PHYSICS_HZ * 12 && win < 0; i++) {
     const live = m.ref.s.phase === 'fight' || m.ref.s.phase === 'deciding';
-    const ev = m.step(live ? [go, go] : [EMPTY_FRAME, EMPTY_FRAME]);
+    const u = live ? ramp(1) : 0;
+    const go: ControlFrame = { ...EMPTY_FRAME, drive: { left: u, right: u } };
+    const ev = m.step([go, go]);
     const s = m.lastSnapshot;
     if (live && s.inContact) {
       if (first < 0) first = s.time;

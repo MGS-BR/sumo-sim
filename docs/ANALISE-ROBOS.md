@@ -1,8 +1,12 @@
 # Análise dos presets — Kunai, Tora e Fuji
 
-Reproduzir: `npm run analise` (cerca de 1,5 min). Código em `analysis/robots.test.ts`.
+Reproduzir: `npm run analise` (cerca de 7 min para as três análises). Código em `analysis/robots.test.ts`.
 
 **Tora** (laranja) e **Fuji** (roxo) foram montados com os valores exatos das telas do editor enviadas pelo usuário; um teste automatizado confere campo a campo. Bloco e Trator saíram da lista de presets. Eles continuam só como robôs de teste (`tests/fixtures.ts`), porque cobrem casos que o editor ainda permite: 4 rodas e lâmina de 20°.
+
+> **Atualizado para o modelo de roda com inércia** ([ANALISE-RODAS-MOTORES.md](ANALISE-RODAS-MOTORES.md)).
+> - Os duelos agora usam **partida suave**: 0 → 100% em ~70 ms, como o teclado no modo realista e o bot.
+> - Com a inércia do rotor, uma largada seca (0 → 100% num passo) faz robô de motor forte empinar, e a análise mediria só isso.
 
 ## Ficha
 
@@ -19,45 +23,48 @@ Os dois passam na inspeção (≤ 100 mm, ≤ 500 g). A lâmina de 99,5 mm do To
 
 ## Sozinho
 
-| Robô | Vel. máx. | 90% da vel. | 20 cm em | Peso nas rodas | Tração | Força dos motores | Nariz (máx. / mín. no arranque e na ré) | Giro no eixo |
-|---|---|---|---|---|---|---|---|---|
-| Kunai | 1,34 m/s | 0,165 s | 0,242 s | 0,72 | 3,6 N | 29 N | +1,0° / −15,5° | 153 RPM |
-| Tora | 0,91 m/s | 0,094 s | 0,273 s | 0,76 | 3,8 N | 66 N | 0,0° / −0,3° | 157 RPM |
-| Fuji | 0,46 m/s | 0,048 s | 0,462 s | 0,76 | 3,9 N | 66 N | 0,0° / −0,3° | 100 RPM |
+| Robô | Vel. máx. | 90% da vel. | 20 cm em | Peso nas rodas | Tração | Motores | Nariz, partida suave (máx. / mín.) | Empina na largada seca | Estimativa do editor | Giro no eixo |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Kunai | 1,34 m/s | 0,21 s | 0,25 s | 0,72 | 3,6 N | 29 N | +12° / −17° | 16° | 17° | 205 RPM |
+| Tora | 0,91 m/s | 0,30 s | 0,43 s | 0,75 | 3,8 N | 66 N | **+42°** / 0° | **90° (fica em pé)** | 53° | 162 RPM |
+| Fuji | 0,46 m/s | 0,20 s | 0,56 s | 0,75 | 3,9 N | 66 N | +23° / 0° | 33° | 34° | 99 RPM |
 
 **Leitura:**
-- **Tração:** os dois são limitados pela tração. Os motores rendem cerca de 17 vezes o que o pneu consegue passar ao chão (μ·N ≈ 3,8 N), então o torque extra não vira força de empurrar.
-- **Estabilidade:** Tora e Fuji não empinam nem afundam o nariz ao arrancar ou inverter a 100%. Variam menos de 0,5°, contra até −15,5° do Kunai.
-- **Velocidade:** o Tora chega ao meio do dohyo quase duas vezes mais rápido.
+- **Tração:** os três são limitados pela tração. Os motores do Tora e do Fuji rendem ~17 vezes o que o pneu passa ao chão.
+- **Empinar (novo):** o torque que acelera rotor e roda volta para o chassi. Com 4,4 kgf·cm por motor e o CG 14 mm atrás, o Tora empina ~42° mesmo com partida suave. Esse torque é 5 a 10 vezes o de motores reais da mesma rotação (ver [ANALISE-RODAS-MOTORES.md](ANALISE-RODAS-MOTORES.md), seção 5).
+- **Velocidade:** o Tora ainda chega ao meio do dohyo antes, mas leva 0,43 s para fazer 20 cm, porque parte da largada é gasta empinado.
 
-## Duelo frontal (100% desde o bip)
+## Duelo frontal (100% desde o bip, partida suave)
 
 São 9 largadas por linha. A sai do lado azul, levemente deslocado (±4 mm) e girado (±1,7°); B sai alinhado.
 
-| A | B | Pontos A | Pontos B | A entra por baixo |
+| A | B | Pontos A | Pontos B | Torinaoshi |
 |---|---|---|---|---|
-| Tora | Fuji | 1/9 | **8/9** | 1/9 |
-| Fuji | Tora | **7/9** | 2/9 | 7/9 |
-| Tora | Kunai | **7/9** | 0/9 (2 Torinaoshi) | 6/9 |
-| Fuji | Kunai | **6/9** | 1/9 (2 Torinaoshi) | 6/9 |
+| Tora | Fuji | 0/9 | 1/9 | 8 |
+| Fuji | Tora | **3/9** | 0/9 | 6 |
+| Tora | Kunai | 0/9 | **6/9** | 3 |
+| Fuji | Kunai | 1/9 | **4/9** | 4 |
+| Tora | Tora | 5/9 | 4/9 | 0 |
+| Fuji | Fuji | 6/9 | 3/9 | 0 |
 
-**O Fuji vence o Tora dos dois lados.**
+**Leitura:**
+- **Tora × Fuji:** o Tora não pontua contra o Fuji (0 em 18 largadas). A maioria trava em Torinaoshi.
+- **Kunai de frente:** a cunha baixa do Kunai entra por baixo dos dois quando eles chegam com o nariz levantado. Isso é novo; no modelo antigo o Kunai perdia.
 
 ### O que decide Tora × Fuji
 
 Cada linha muda um único fator e enfrenta o outro preset original:
 
-| Variante | Resultado |
+| Variante | Pontos da variante × do rival |
 |---|---|
-| Tora com a velocidade do Fuji | **5/9 a 4/9**: empate técnico |
-| Fuji com a velocidade do Tora | 2/9 a 6/9: passa a perder |
-| Tora com frente a 60°, altura 60 mm, CG −15,5 mm ou rodas de 22 mm | 0–1/9: nada muda |
+| Tora com a velocidade do Fuji | 2 × 5 |
+| Tora com frente a 60° | 0 × 1 (8 Torinaoshi) |
+| Tora com altura 60 mm | 2 × 7 |
+| Tora com CG −15,5 mm | 0 × 4 |
+| Tora com rodas de 22 mm | 2 × 7 |
+| Fuji com a velocidade do Tora | **7 × 0** |
 
-**Velocidade é o fator.** As lâminas são iguais (15°, aresta a 0,2 mm), então nenhum dos dois tem vantagem de altura. Quem chega mais rápido sobe na rampa do outro: no impacto, o nariz do Tora levanta ~2,5 mm e ~4°, o peso sai das rodas e ele perde a disputa de empurrar.
-
-**Na prática:**
-- **Contra lâmina igual:** o Tora não deve chegar a 100% de frente. Reduzir antes do contato ou atacar de lado aproveita a velocidade sem subir na rampa.
-- **Contra lâmina pior:** a velocidade continua sendo vantagem.
+**Não é mais a velocidade:** o Fuji com a velocidade do Tora vence ainda mais. O que pesa é quanto cada um empina no choque: o Tora levanta mais o nariz e a lâmina do Fuji entra por baixo. No modelo antigo, sem inércia, a velocidade explicava tudo.
 
 ## Bot difícil × bot difícil, largada sorteada
 
@@ -65,30 +72,31 @@ São 10 sementes, e cada uma é jogada com as cores trocadas: 20 partidas por pa
 
 | Par | Vitórias |
 |---|---|
-| Tora × Fuji | 0 – **20** |
-| Tora × Kunai | **19** – 1 |
+| Tora × Fuji | 3 – **17** |
+| Tora × Kunai | 10 – 10 |
 | Fuji × Kunai | **20** – 0 |
 
-Hierarquia com o bot atual: **Fuji > Tora > Kunai**. O bot de treino ataca sempre a 100% de frente, que é justamente o cenário em que o Tora perde.
+Hierarquia com o bot atual: **Fuji > Tora ≈ Kunai**.
+- **Sorteio × duelo frontal:** com largada sorteada, o bot manobra e quase nunca chega de frente perfeito, por isso o Kunai não repete o resultado do duelo frontal.
+- **Bot com partida suave:** o bot agora usa a mesma rampa do teclado.
 
 ## Lado da arena
 
-Em espelho perfeito (mesma pose, só girada 180°), quem sobe na rampa é decidido por arredondamento numérico do motor de física. Com largadas realistas (±1 cm, ±3°, 30 largadas por linha), não sobra vantagem de lado:
+Em espelho perfeito (mesma pose, só girada 180°), quem sobe na rampa é decidido por arredondamento numérico do motor de física. Com largadas realistas (±1 cm, ±3°, 30 largadas por linha, partida suave):
 
-| Espelho | Vermelho (+x) | Azul (−x) |
-|---|---|---|
-| Tora × Tora | 17 | 13 |
-| Fuji × Fuji | 18 | 12 |
-| Kunai × Kunai | 6 | 8 (16 Torinaoshi) |
-| Trator × Trator (teste) | 12 | 18 |
+| Espelho | Vermelho (+x) | Azul (−x) | Torinaoshi |
+|---|---|---|---|
+| Tora × Tora | 17 | 13 | 0 |
+| Fuji × Fuji | 13 | 9 | 8 |
+| Kunai × Kunai | 6 | 15 | 9 |
 
-As diferenças cabem no ruído de 30 largadas (±3). Tora (vermelho) × Fuji (azul) deu Fuji 23 a 7.
+- **Tora e Fuji:** as diferenças cabem no ruído.
+- **Kunai:** 6 × 15 está no limite do ruído (21 decididas). Vale acompanhar, mas não muda a hierarquia.
+- **Tora × Fuji:** Tora de vermelho contra Fuji de azul deu Fuji 27 a 1.
 
 ## Limitações
 
-- **Desvio em linha reta:** robôs de 2 rodas com CG atrás arrastam a frente no chão e desviam um pouco andando a 100%. O Tora desvia 1,6° em 32 cm, o Fuji 0,5° em 17 cm e o Kunai 0,3° em 41 cm.
+- **Desvio em linha reta:** robôs de 2 rodas que arrastam a frente no chão desviam um pouco andando a 100%. Com o novo modelo de roda: Kunai 1,7° em 53 cm, Tora 0,2° em 26 cm, Fuji 0,3° em 18 cm.
   - A geometria é simétrica; foi conferida vértice a vértice. O desvio vem do contato deslizante no solver.
-  - Com o CG no eixo, ou andando de ré, some.
-  - Robôs reais também desviam, mas aqui o desvio é sempre para o mesmo lado.
 - **Pilotagem:** o roteiro de acelerador fixo e o bot de treino não representam pilotagem humana.
 - **Alcance:** os números comparam tendências dentro do simulador. Para prever o robô real, calibre massa, CG e atritos com medidas reais.

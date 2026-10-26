@@ -144,6 +144,10 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
 .chk.ok i { color: var(--ok); }
 .chk.note i, .chk.note b { color: var(--gold); }
 .prm-toggle { grid-template-columns: minmax(0, 1fr) auto; }
+.prm-select { grid-template-columns: 128px minmax(0, 1fr); }
+.prm-select select { width: 100%; min-width: 0; color-scheme: dark; background: rgba(0,0,0,.3); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font: 600 .8rem var(--sans); }
+.prm-select option, .prm-select optgroup { background: #12151b; color: var(--ink); }
+.prm-select select:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
 .prm-toggle .tog { grid-template-columns: auto; padding: 0; } .chk.bad i, .chk.bad b { color: var(--bad); }
 .chk span { color: var(--muted); font-size: .74rem; font-family: var(--mono); }
 .ed-derived { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -243,6 +247,7 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
   /* celular: o topo da tela mostra o robô (e aceita arrastar a câmera); os painéis rolam por baixo */
   .screen.editor { padding-top: 42vh; }
   .prm { grid-template-columns: minmax(0, 1fr) minmax(70px, 1fr) 88px; }
+  .prm-select { grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); }
   .brand { padding-bottom: 0; }
   .vs { width: auto; flex-direction: row; flex-wrap: wrap; justify-content: center; }
   .vs-mark { font-size: 2.5rem; }

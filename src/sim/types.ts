@@ -41,8 +41,14 @@ export interface RobotSpec {
     count: 2 | 4;
     radius: number;
     width: number;
-    /** Atrito estático pneu x fórmica (silicone ~1,0-1,3) */
+    /** Atrito de PICO pneu × dohyo (μ máximo antes de patinar). Silicone 20 Shore A ≈ 0,75 */
     friction: number;
+    /** Escorregamento em que o atrito chega ao pico (0,05–0,3). Padrão 0,12 */
+    slipPeak?: number;
+    /** Atrito patinando ÷ atrito de pico (0,5–1). Padrão 0,85 */
+    slideRatio?: number;
+    /** Massa de cada roda montada (kg). Padrão: estimada pelo tamanho */
+    mass?: number;
     /** Rodas embutidas na chassi (caixas de roda nas laterais). Padrão: true */
     covered?: boolean;
     /** Folga entre a roda e a caixa de roda (m). Padrão: 2 mm */
@@ -54,6 +60,9 @@ export interface RobotSpec {
     freeRpm: number;
     /** Torque de travamento no eixo de saída, por motor (N·m). 1 kgf·cm = 0,0981 N·m */
     stallTorque: number;
+    /** Constante de tempo mecânica no eixo de saída (s): quanto o rotor, refletido pela
+     *  redução, demora para acelerar. Padrão 15 ms */
+    timeConstant?: number;
   };
 
   /** Massa total (kg) — limite 0,500 */
@@ -125,6 +134,8 @@ export interface WheelState {
   /** Força lateral (N) */
   lateral: number;
   slipping: boolean;
+  /** Escorregamento longitudinal (−: freando/arrastado, +: patinando para a frente) */
+  slip: number;
   /** Ângulo acumulado de rotação (visual) */
   spin: number;
   /** Velocidade angular da roda (rad/s) — som do motor */

@@ -1,7 +1,8 @@
 import RAPIER from '@dimforge/rapier3d-deterministic-compat';
 import { ARENA, GRAVITY } from './arena';
 import { buildRobotGeometry, type RobotGeometry } from './geometry';
-import { wheelForces } from './drive';
+import { stepWheel, type TireParams } from './drive';
+import { WHEEL_DEFAULTS, wheelInertia } from './catalog';
 import { PHYSICS_DT } from './modes';
 import { add, cross, dot, norm, quatFromYaw, rotate, scale, sub, v3, yawOf } from './math';
 import type { DriveCommand, Pose2D, Quat, RobotSpec, RobotState, SimSnapshot, Vec3, WheelState } from './types';
@@ -31,8 +32,6 @@ export const PHYS = {
   /** Rigidez do pneu/suspensão por roda (N/m) */
   suspensionK: 9000,
   suspensionZeta: 0.7,
-  /** Atrito cinético = fração do estático */
-  kineticRatio: 0.85,
   /** Atrito do dohyo (fórmica) e do chão */
   formicaFriction: 1.0,
   /** Tolerância para considerar dois corpos "encostando" */
@@ -46,6 +45,8 @@ export const PHYS = {
 interface WheelRuntime {
   prevCompression: number;
   spin: number;
+  /** rotação da roda (rad/s): estado com inércia, persiste entre passos */
+  omega: number;
   state: WheelState;
 }
 
@@ -56,12 +57,26 @@ interface RobotRuntime {
   colliders: Collider[];
   wheels: WheelRuntime[];
   freeOmega: number;
+  /** inércia de rotação de cada roda (kg·m²): roda + rotor refletido */
+  wheelInertia: number;
+  tire: TireParams;
   command: DriveCommand;
   /** Pose do tick anterior: a velocidade nos contatos é medida pela variação de pose,
    *  imune à velocidade "residual" que o solver de contatos macios reporta em repouso */
   prevPos: Vec3;
   prevRot: Quat;
   hasPrev: boolean;
+}
+
+/**
+ * Ponto de contato no mundo, na superfície do colisor `a` de `contactPair(a, b)`.
+ * Os pontos locais do manifold são do "colisor 1" e do "colisor 2" do Rapier; com
+ * `flipped` o 1 é o `b`. Usar sempre o ponto do próprio `a` com a pose de `a`.
+ */
+export function pointOnFirst(flipped: boolean, lp1: Vec3 | null, lp2: Vec3 | null, t: Vec3, q: Quat): Vec3 | null {
+  const lp = flipped ? lp2 : lp1;
+  if (!lp) return null;
+  return add({ x: t.x, y: t.y, z: t.z }, rotate(q, { x: lp.x, y: lp.y, z: lp.z }));
 }
 
 export class SumoWorld {
@@ -163,6 +178,12 @@ export class SumoWorld {
       body,
       colliders,
       freeOmega,
+      wheelInertia: wheelInertia(spec).total,
+      tire: {
+        muPeak: spec.wheels.friction,
+        slipPeak: spec.wheels.slipPeak ?? WHEEL_DEFAULTS.slipPeak,
+        slideRatio: spec.wheels.slideRatio ?? WHEEL_DEFAULTS.slideRatio,
+      },
       command: { left: 0, right: 0 },
       prevPos: v3(),
       prevRot: { x: 0, y: 0, z: 0, w: 1 },
@@ -170,7 +191,8 @@ export class SumoWorld {
       wheels: geom.wheels.map(() => ({
         prevCompression: 0,
         spin: 0,
-        state: { load: 0, traction: 0, lateral: 0, slipping: false, spin: 0, omega: 0, contact: null, onOutsideFloor: false, overEdge: false },
+        omega: 0,
+        state: { load: 0, traction: 0, lateral: 0, slipping: false, slip: 0, spin: 0, omega: 0, contact: null, onOutsideFloor: false, overEdge: false },
       })),
     };
   }
@@ -191,7 +213,10 @@ export class SumoWorld {
     r.body.setRotation(quatFromYaw(pose.yaw), true);
     r.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     r.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    for (const w of r.wheels) w.prevCompression = 0;
+    for (const w of r.wheels) {
+      w.prevCompression = 0;
+      w.omega = 0;
+    }
     r.hasPrev = false;
   }
 
@@ -273,17 +298,41 @@ export class SumoWorld {
       const st = wr.state;
       const h = hits[idx];
       const u = wg.side === 'left' ? r.command.left : r.command.right;
+      const wheelIn = (load: number, vLong: number, vLat: number) => ({
+        u,
+        load,
+        vLong,
+        vLat,
+        omega: wr.omega,
+        radius: wg.radius,
+        freeOmega: r.freeOmega,
+        stallTorque: r.spec.motor.stallTorque,
+        inertia: r.wheelInertia,
+        tire: r.tire,
+        effMass,
+        dt,
+        holdTorque: PHYS.gearboxHold * r.spec.motor.stallTorque,
+      });
+      /** reação no chassi: o motor que acelera o rotor/roda empurra o chassi ao contrário */
+      const react = (omegaNew: number, axis: Vec3) => {
+        const dL = r.wheelInertia * (omegaNew - wr.omega);
+        if (dL !== 0) body.applyTorqueImpulse(scale(axis, -dL), true);
+        wr.omega = omegaNew;
+      };
       if (!h) {
+        const out = stepWheel(wheelIn(0, 0, 0));
+        react(out.omega, cross(up, fwdBody));
         st.load = 0;
         st.traction = 0;
         st.lateral = 0;
         st.slipping = true;
+        st.slip = 0;
         st.contact = null;
         st.onOutsideFloor = false;
         st.overEdge = this.hubOverEdge(pos, rot, wg);
-        wr.spin += u * r.freeOmega * dt;
+        wr.spin += wr.omega * dt;
         st.spin = wr.spin;
-        st.omega = u * r.freeOmega;
+        st.omega = wr.omega;
         return;
       }
       wr.prevCompression = h.compression;
@@ -304,29 +353,19 @@ export class SumoWorld {
 
       const fwd = norm(sub(fwdBody, scale(h.normal, dot(fwdBody, h.normal))));
       const lat = cross(h.normal, fwd);
-      const out = wheelForces({
-        u,
-        load,
-        vLong: dot(v, fwd),
-        vLat: dot(v, lat),
-        radius: wg.radius,
-        freeOmega: r.freeOmega,
-        stallTorque: r.spec.motor.stallTorque,
-        muStatic: r.spec.wheels.friction,
-        muKinetic: r.spec.wheels.friction * PHYS.kineticRatio,
-        effMass,
-        dt,
-        holdForce: (PHYS.gearboxHold * r.spec.motor.stallTorque) / wg.radius,
-      });
+      const out = stepWheel(wheelIn(load, dot(v, fwd), dot(v, lat)));
       const f = add(add(scale(up, fs), scale(fwd, out.fLong)), scale(lat, out.fLat));
       body.applyImpulseAtPoint(scale(f, dt), h.point, true);
+      // eixo da roda: ω·(n × frente) é a rotação de quem rola para a frente
+      react(out.omega, lat);
 
-      wr.spin += out.omega * dt;
-      st.omega = out.omega;
+      wr.spin += wr.omega * dt;
+      st.omega = wr.omega;
       st.load = load;
       st.traction = out.fLong;
       st.lateral = out.fLat;
       st.slipping = out.slipping;
+      st.slip = out.slip;
       st.spin = wr.spin;
       st.contact = h.point;
       st.onOutsideFloor = h.collider.handle !== this.dohyo.handle;
@@ -340,27 +379,28 @@ export class SumoWorld {
     return Math.hypot(p.x, p.z) > ARENA.dohyoRadius;
   }
 
-  /** Ponto (mundo) onde dois colisores se tocam, ou null */
+  /**
+   * Ponto (mundo), na superfície de `a`, onde `a` toca `b`; null se não se tocam.
+   * Usa o contato mais próximo do manifold e o ponto local DO PRÓPRIO `a`: quando o Rapier
+   * entrega o par invertido (`flipped`), o ponto 1 é do outro colisor. Antes o código
+   * transformava o ponto do chão com a pose do robô e, sem pontos de solver, a marca de
+   * evidência podia cair longe do robô, até do lado oposto da arena.
+   */
   private touchPoint(a: Collider, b: Collider): Vec3 | null {
-    let pt: Vec3 | null = null;
-    this.world.contactPair(a, b, (manifold) => {
-      if (pt) return;
+    let best: Vec3 | null = null;
+    let bestDist = Infinity;
+    this.world.contactPair(a, b, (manifold, flipped) => {
       const n = manifold.numContacts();
       for (let i = 0; i < n; i++) {
-        if (manifold.contactDist(i) > PHYS.touchEps) continue;
-        // ponto do solver (mundo); se não houver, usa o ponto local do colisor 1 transformado
-        const sp = manifold.numSolverContacts() > 0 ? manifold.solverContactPoint(0) : null;
-        if (sp) pt = { x: sp.x, y: sp.y, z: sp.z };
-        else {
-          const lp = manifold.localContactPoint1(i);
-          const t = a.translation();
-          const q = a.rotation();
-          pt = lp ? add({ x: t.x, y: t.y, z: t.z }, rotate(q, { x: lp.x, y: lp.y, z: lp.z })) : { x: t.x, y: 0, z: t.z };
-        }
-        return;
+        const d = manifold.contactDist(i);
+        if (d > PHYS.touchEps || d >= bestDist) continue;
+        const p = pointOnFirst(flipped, manifold.localContactPoint1(i), manifold.localContactPoint2(i), a.translation(), a.rotation());
+        if (!p) continue;
+        best = p;
+        bestDist = d;
       }
     });
-    return pt;
+    return best;
   }
 
   robotState(i: number): RobotState {

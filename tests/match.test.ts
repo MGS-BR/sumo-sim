@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Match } from '../src/sim/match';
 import { MODES, PHYSICS_DT } from '../src/sim/modes';
-import { robot } from './fixtures';
+import { robot, softStart } from './fixtures';
 import { PRESETS } from '../src/sim/presets';
 import { SparringBot, type BotLevel } from '../src/control/sparringBot';
 import type { RefEvent } from '../src/sim/referee';
@@ -60,10 +60,12 @@ describe('evidência do toque fora', () => {
     const m = await Match.create({ specs: [robot('bloco'), robot('kunai')], mode: MODES.realista });
     m.step([{ ...EMPTY_FRAME, placeTarget: { x: 0.3, z: 0, yaw: 0 } }, EMPTY_FRAME]);
     m.step([{ ...EMPTY_FRAME, ready: true }, { ...EMPTY_FRAME, ready: true }]);
-    const go: ControlFrame = { ...EMPTY_FRAME, drive: { left: 1, right: 1 } };
+    const ramp = softStart();
     let yuko: RefEvent | undefined;
     for (let k = 0; k < 480 * 6 && !yuko; k++) {
       const live = m.ref.s.phase === 'fight' || m.ref.s.phase === 'deciding';
+      const u = live ? ramp(1) : 0;
+      const go: ControlFrame = { ...EMPTY_FRAME, drive: { left: u, right: u } };
       yuko = m.step(live ? [go, EMPTY_FRAME] : [EMPTY_FRAME, EMPTY_FRAME]).find((e) => e.type === 'yuko');
     }
     expect(yuko).toMatchObject({ to: [1] });

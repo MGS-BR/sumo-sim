@@ -5,12 +5,13 @@ import { Sfx } from './audio';
 import { KeyboardState } from './control/keyboard';
 import { Game, type Opponent } from './game';
 import { MODES, type GameMode } from './sim/modes';
-import { inspect, PARAMS, type ParamDef } from './sim/inspection';
+import { inspect, PARAMS, WHEELIE_WARN_DEG, type ParamDef } from './sim/inspection';
 import { defaultPlacement } from './sim/placement';
 import { loadRapier } from './sim/physics';
 import type { RobotSpec } from './sim/types';
 import { allRobots, isPreset, resolveSlots, loadCustomRobots, loadSettings, newRobotId, saveCustomRobots, saveSettings } from './ui/storage';
 import { PRESETS } from './sim/presets';
+import { MOTOR_PRESETS, TIRE_PRESETS, applyMotorPreset, applyTirePreset, motorLabel, motorPresetOf, tirePresetOf } from './sim/catalog';
 import { icon, kbdArrow } from './ui/icons';
 
 interface Settings {
@@ -312,6 +313,10 @@ export class App {
       ['Peso nas rodas', `${fmt(d.wheelLoadFraction * 100)}%`],
       ['Tração máx.', `${fmt(d.maxTraction, 1)} N <small>(motores: ${fmt(d.motorForce)} N)</small>`],
     ];
+    const m = motorPresetOf(spec);
+    const t = tirePresetOf(spec);
+    if (m || t) rows.splice(4, 0, ['Peças', esc([m ? `${m.family} ${m.line} ${m.ratio}:1` : '', t ? t.label.split(' · ')[0] : ''].filter(Boolean).join(' · '))]);
+    if (d.wheelieDeg > WHEELIE_WARN_DEG) rows.push(['Largada seca', `empina ~${fmt(d.wheelieDeg)}° <small>(sem rampa)</small>`]);
     return `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
       <div class="insp ${r.ok ? 'ok' : 'bad'}">${r.ok ? icon('check') + ' Aprovado na inspeção' : icon('x') + ' Reprovado: ' + r.checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}</div>`;
   }
@@ -337,7 +342,7 @@ export class App {
         </div>
         <div class="ed-groups">${groups
           .map(
-            (g) => `<fieldset><legend>${g}</legend>${PARAMS.filter((p) => p.group === g)
+            (g) => `<fieldset><legend>${g}</legend>${g === 'Motor' ? this.presetRow('motor') : g === 'Rodas' ? this.presetRow('tire') : ''}${PARAMS.filter((p) => p.group === g)
               .map((p) => this.paramRow(p, spec))
               .join('')}</fieldset>`,
           )
@@ -379,8 +384,22 @@ export class App {
         const range = row.querySelector<HTMLInputElement>('input[type=range]')!;
         const num = row.querySelector<HTMLInputElement>('input[type=number]')!;
         if (range.value !== v) range.value = v;
-        if (num.value !== v && document.activeElement !== num) num.value = v;
+        // não atropela o que a pessoa está digitando; o resto (preset, campo ligado) sempre atualiza
+        if (num.value !== v && !(document.activeElement === num && num.dataset.typing === '1')) num.value = v;
       });
+      // presets: o select mostra o preset que bate com os valores atuais (ou "Personalizado")
+      const m = motorPresetOf(spec);
+      const t = tirePresetOf(spec);
+      const ms = scr.querySelector<HTMLSelectElement>('[data-preset=motor] select')!;
+      const ts = scr.querySelector<HTMLSelectElement>('[data-preset=tire] select')!;
+      if (document.activeElement !== ms) ms.value = m?.id ?? '';
+      if (document.activeElement !== ts) ts.value = t?.id ?? '';
+      scr.querySelector('[data-preset=motor] small')!.textContent = m
+        ? `${m.family} ${m.line} · ${fmt(m.stallKgfcm, 2)} kgf·cm · ${fmt(m.stallCurrent, 2)} A travado · ${fmt(m.massG, 1)} g cada`
+        : 'valores livres';
+      scr.querySelector('[data-preset=tire] small')!.textContent = t
+        ? `silicone ${t.shoreA} Shore A · ${fmt(t.mass * 1000)} g cada`
+        : 'valores livres';
     };
     const refresh = () => {
       syncRows();
@@ -419,7 +438,16 @@ export class App {
         refresh();
       });
     });
-    scr.querySelectorAll<HTMLElement>('.prm:not(.prm-toggle)').forEach((row) => {
+    scr.querySelectorAll<HTMLSelectElement>('.prm-select select').forEach((sel) =>
+      sel.addEventListener('change', () => {
+        const kind = sel.closest<HTMLElement>('.prm-select')!.dataset.preset;
+        // só ids do catálogo são aplicados; "Personalizado" mantém os valores atuais
+        if (kind === 'motor') applyMotorPreset(spec, sel.value);
+        else if (kind === 'tire') applyTirePreset(spec, sel.value);
+        refresh();
+      }),
+    );
+    scr.querySelectorAll<HTMLElement>('.prm:not(.prm-toggle):not(.prm-select)').forEach((row) => {
       const p = PARAMS.find((x) => x.key === row.dataset.key)!;
       const range = row.querySelector<HTMLInputElement>('input[type=range]')!;
       const num = row.querySelector<HTMLInputElement>('input[type=number]')!;
@@ -430,7 +458,11 @@ export class App {
         refresh();
       };
       range.addEventListener('input', () => set(+range.value));
-      num.addEventListener('change', () => set(+num.value));
+      num.addEventListener('input', () => (num.dataset.typing = '1'));
+      num.addEventListener('change', () => {
+        delete num.dataset.typing;
+        set(+num.value);
+      });
     });
     scr.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
       b.addEventListener('click', () => this.view.inspectView(b.dataset.view as 'perspectiva' | 'frente' | 'lado' | 'tras' | 'cima')),
@@ -458,6 +490,27 @@ export class App {
       this.save();
       this.showSelect();
     });
+  }
+
+  /** Linha de escolha de preset (motor ou pneu) — opções vêm do catálogo, nada do usuário */
+  private presetRow(kind: 'motor' | 'tire') {
+    let options = '';
+    if (kind === 'motor') {
+      const lines = [...new Set(MOTOR_PRESETS.map((m) => `${m.family} ${m.line}`))];
+      options = lines
+        .map(
+          (l) =>
+            `<optgroup label="${esc(l)}">${MOTOR_PRESETS.filter((m) => `${m.family} ${m.line}` === l)
+              .map((m) => `<option value="${esc(m.id)}">${esc(motorLabel(m))}</option>`)
+              .join('')}</optgroup>`,
+        )
+        .join('');
+    } else options = TIRE_PRESETS.map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`).join('');
+    const label = kind === 'motor' ? 'Motor do catálogo' : 'Roda do catálogo';
+    return `<div class="prm prm-select" data-preset="${kind}">
+      <label>${label}<small></small></label>
+      <select aria-label="${label}"><option value="">Personalizado</option>${options}</select>
+    </div>`;
   }
 
   private paramRow(p: ParamDef, spec: RobotSpec) {

@@ -3,6 +3,9 @@ import type { RobotSpec } from './types';
 
 const num = (v: unknown, fallback: number, min: number, max: number) =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
+/** campo opcional: some se não for número finito; se for, fica dentro da faixa física */
+const optNum = (v: unknown, min: number, max: number) =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : undefined;
 const str = (v: unknown, fallback: string, maxLen: number) => (typeof v === 'string' && v.length ? v.slice(0, maxLen) : fallback);
 const color = (v: unknown, fallback: string) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback);
 
@@ -48,10 +51,14 @@ export function normalizeSpec(raw: unknown): RobotSpec | null {
       friction: num(w.friction, base.wheels.friction, 0.1, 2),
       covered: typeof w.covered === 'boolean' ? w.covered : true,
       wellGap: num(w.wellGap, 0.002, 0.0005, 0.01),
+      slipPeak: optNum(w.slipPeak, 0.03, 0.4),
+      slideRatio: optNum(w.slideRatio, 0.4, 1),
+      mass: optNum(w.mass, 0.002, 0.1),
     },
     motor: {
       freeRpm: num(m.freeRpm, base.motor.freeRpm, 10, 5000),
       stallTorque: num(m.stallTorque, base.motor.stallTorque, 0.005, 2),
+      timeConstant: optNum(m.timeConstant, 0.001, 0.08),
     },
     mass: num(r.mass, base.mass, 0.05, 2),
     comX: num(r.comX, base.comX, -0.1, 0.1),

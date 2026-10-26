@@ -56,3 +56,17 @@ export function robot(id: string): RobotSpec {
   if (!spec) throw new Error(`robô de teste desconhecido: ${id}`);
   return structuredClone(spec);
 }
+
+/**
+ * Partida suave (rampa de PWM), como o teclado no modo realista e o bot fazem.
+ * Com a inércia do rotor, 0 → 100% num único passo faz robôs de motor forte empinarem;
+ * os testes que não são sobre a largada usam a rampa para não depender disso.
+ */
+export function softStart(rate = 14, dt = 1 / 480) {
+  let u = 0;
+  return (target: number) => {
+    const step = rate * dt;
+    u += Math.max(-step, Math.min(step, target - u));
+    return u;
+  };
+}

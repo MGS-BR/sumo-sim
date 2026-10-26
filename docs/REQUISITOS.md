@@ -29,8 +29,9 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF07 | HUD: placar de Yuko, Keikoku, round, relógio, contagem do juiz (1-2-3), mensagens | ✅ |
 | RF08 | Presets prontos: Kunai (cunha), Tora (laranja, rápido) e Fuji (roxo, torque). Tora e Fuji usam os valores enviados pelo usuário. Bloco e Trator saíram e ficaram só como robôs de teste. Configuração salva com um robô que não existe mais cai num preset válido, diferente do outro lado | ✅ |
 | RF09 | Editor de robô: dimensões, lâmina (ângulo, comprimento, largura, altura ligada, aresta), rodas, motor, massa e CG; inspeção ao vivo; câmera controlada pelo mouse com vistas prontas; salvo no navegador | ✅ |
+| RF21 | Presets de motor (N20 HP e comum, N30 12 V e 5 V, JGA16-050 6 V, por redução) e de roda (RoboCore StickyMAX S20 e S30, 32 mm) no editor, com valores de folha de dados. O editor reconhece o preset pelos valores (sem texto salvo na spec); mexer num campo vira "Personalizado". A ficha mostra as peças, e o editor avisa quando a largada seca pode empinar mais de 15° | ✅ |
 | RF10 | Câmeras: transmissão, de cima, rente ao dohyo, livre (mouse) | ✅ |
-| RF11 | Replay em câmera lenta do lance do Yuko. Quando o ponto é por tocar fora, o replay congela no instante do toque, aproxima a câmera rente ao chão e marca o ponto | ✅ |
+| RF11 | Replay em câmera lenta do lance do Yuko. Quando o ponto é por tocar fora, o replay congela no instante do toque, aproxima a câmera rente ao chão e marca o ponto. Corrigido: a marca podia cair longe do robô, até do lado oposto, quando o Rapier entregava o par de contato invertido. A marca ao vivo agora é a do robô que perdeu o ponto | ✅ |
 | RF19 | Rodas embutidas na chassi: laterais em largura total com caixas de roda em arco e folga ajustável (padrão 2 mm). Opção de rodas por fora no editor. A física usa fatias convexas da mesma forma (erro < 0,6 mm) | ✅ |
 | RF18 | Ícone da página (dohyo) em SVG, `.ico` (16/32/48 px), PNG 32 px, ícone de toque da Apple e manifesto com 192/512 px. O build de arquivo único embute os ícones. Ícones SVG próprios na interface (sem emojis) e som em todos os botões, por tipo (confirmar, voltar, perigo, seleção) | ✅ |
 | RF20 | Posicionamento aleatório (opção no menu, desligada por padrão): vale para Realista e Arcade, 2 jogadores e bot. A cada round sorteia giro (0–360°), lateral e distância de cada robô, sempre dentro do Art. 10 e a pelo menos 1 cm do degrau. Os ajustes ficam travados; cada lado só confirma **Pronto**, e o limite de 30 s continua valendo | ✅ |
@@ -59,13 +60,20 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 - **Escala:** 1 unidade = 1 m. `lengthUnit = 0,01` no Rapier para tolerância de penetração de ~0,1 mm.
 - **Chassi e lâmina:** cascos convexos gerados da spec. Lâmina com atrito baixo (aço ~0,2), chassi ~0,4.
 - **Rodas (modelo próprio, não colisores):** raycast por roda contra o dohyo/chão. Suspensão rígida (9000 N/m por roda, com pré-carga compensando a deflexão estática). Isso dá a carga **N** em cada roda.
-- **Motor DC:** τ = τ_travamento · (u − ω/ω_livre), com u = PWM. Com u = 0 o motor freia (curto), e o atrito da redução segura o robô parado.
-- **Pneu:** círculo de atrito, |F| ≤ μ·N, com atrito cinético de 85% do estático ao patinar.
+- **Motor DC:** τ = τ_travamento · (u − ω/ω_livre), com u = PWM e limite de corrente de ±τ_travamento. Com u = 0 o motor freia (curto), e o atrito da redução segura o robô parado.
+- **Roda com inércia:**
+  - A rotação de cada roda é um estado. A inércia soma a da roda e a do rotor refletida pela redução: J = τ_mecânico·T_travamento/ω_livre.
+  - A roda demora para acelerar, patina, é arrastada e gira no ar.
+  - O torque que acelera rotor e roda volta para o chassi, e é isso que faz o robô empinar.
+- **Pneu:** curva de atrito × escorregamento (Pacejka simplificada). Sobe até μ_pico no escorregamento de pico e cai para 85% patinando, combinando o longitudinal e o lateral.
+- **Integração:** a força de cada passo é resolvida de forma implícita (bisseção), estável com qualquer inércia e determinística. Detalhes em [ANALISE-RODAS-MOTORES.md](ANALISE-RODAS-MOTORES.md).
 - **Rodas como colisores só contra o outro robô:** um rival pode bater na sua roda, mas o contato com o chão é do modelo de pneu.
 - **Detecção de "tocar fora":** qualquer colisor tocando o chão de fora, ou uma roda apoiada fora do dohyo.
 
 **Validação (testes automatizados):**
-- Velocidade máxima de cada preset dentro de 90–105% da teórica (RPM × raio).
+- Velocidade de regime de cada preset dentro de 90–102% da teórica (RPM × raio), com partida suave.
+- Roda solta chega a 63% da rotação livre em t = τ; força nunca passa de μ·N; parado não gera força (sem drift).
+- Com partida suave nenhum preset capota; o mesmo robô com motor e roda do catálogo empina menos de 15° mesmo com largada seca.
 - Todos os presets são limitados por tração, não por motor. Exemplo do Bloco: 4 motores somam ~100 N, mas a tração máxima é ~5,4 N.
 - Trator (aresta a 0,2 mm, 20°) contra Bloco (aresta a 0,5 mm): durante o contato, o Bloco fica com menos de 90% do peso nas rodas e o Trator com mais de 100%; o Bloco sai primeiro.
 - Robô parado não escorrega (< 1 mm em 3 s).
@@ -123,7 +131,8 @@ src/
     arena.ts        dimensões oficiais
     types.ts        RobotSpec, ControlFrame, SimSnapshot
     geometry.ts     spec → cascos convexos + rodas (física e render)
-    drive.ts        motor DC + pneu (μ·N)
+    drive.ts        motor DC + roda com inércia + curva de atrito × escorregamento
+    catalog.ts      presets de motor (N20, N30, JGA16-050) e roda (StickyMAX)
     physics.ts      SumoWorld: Rapier, rodas por raycast, detecção de saída
     referee.ts      Juiz: máquina de estados pura
     placement.ts    Art. 10 + sorteio de pose legal
@@ -185,10 +194,12 @@ tests/            vitest (física, juiz, partidas bot × bot, determinismo)
 - Exportar/importar robôs (JSON).
 - Mega Sumô e Sumô LEGO reaproveitando a mesma base (dimensões e limites já isolados).
 
-Análise detalhada de comprimento, largura e ângulo da lâmina: [ANALISE-LAMINA.md](ANALISE-LAMINA.md). Análise dos presets (Kunai, Tora, Fuji): [ANALISE-ROBOS.md](ANALISE-ROBOS.md).
+Análise detalhada de comprimento, largura e ângulo da lâmina: [ANALISE-LAMINA.md](ANALISE-LAMINA.md). Análise dos presets (Kunai, Tora, Fuji): [ANALISE-ROBOS.md](ANALISE-ROBOS.md). Motores, rodas e o modelo de roda: [ANALISE-RODAS-MOTORES.md](ANALISE-RODAS-MOTORES.md).
 
 ## 9. Limitações conhecidas
-- O modelo de pneu é simplificado: sem inércia própria da roda e sem curva de atrito por escorregamento.
+- A constante de tempo do motor (inércia do rotor) é estimada; ela muda muito o quanto o robô empina. Dá para medir filmando a roda solta em câmera lenta.
+- O atrito dos pneus StickyMAX vem de um único teste (JSumo, madeira laminada); o escorregamento no pico é estimativa.
+- Fora do modelo: queda de tensão da bateria, limite de corrente do driver e folga da redução.
 - O bot de treino "vê" a posição real do rival (não usa sensores).
 - Não há dano nem quebra de lâmina (Nota 14). Ela não se aplica a uma lâmina indestrutível.
 - Detecção de "mesma órbita" (Art. 12) não implementada.
