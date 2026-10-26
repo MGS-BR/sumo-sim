@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { engineMix } from '../src/audio';
 import { robot as testRobot } from './fixtures';
+import { effectiveMotor } from '../src/sim/catalog';
 import type { RobotState } from '../src/sim/types';
 
 const spec = testRobot('tora');
@@ -35,8 +36,9 @@ describe('voz do motor', () => {
     expect(cruise.body).toBeGreaterThan(stall.body);
   });
   it('motor mais rápido soa mais agudo', () => {
-    const fast = testRobot('kunai'); // 800 RPM
-    const fastFree = (fast.motor.freeRpm * 2 * Math.PI) / 60;
+    const fast = testRobot('kunai');
+    fast.motor.freeRpm = 900;
+    const fastFree = (effectiveMotor(fast).freeRpm * 2 * Math.PI) / 60;
     expect(engineMix(robot(1, 1, fastFree), fast).rotorHz).toBeGreaterThan(engineMix(robot(1, 1), spec).rotorHz);
   });
   it('valores sempre finitos e dentro de faixas seguras', () => {

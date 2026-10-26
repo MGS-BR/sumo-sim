@@ -1,5 +1,6 @@
 import { PRESETS } from './presets';
-import type { RobotSpec } from './types';
+import type { BatteryCells, RobotSpec } from './types';
+import { BATTERIES, DEFAULT_CELLS } from './catalog';
 
 const num = (v: unknown, fallback: number, min: number, max: number) =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
@@ -22,6 +23,9 @@ export function normalizeSpec(raw: unknown): RobotSpec | null {
   const b = (r.blade ?? {}) as Record<string, any>;
   const w = (r.wheels ?? {}) as Record<string, any>;
   const m = (r.motor ?? {}) as Record<string, any>;
+  const bat = (r.battery ?? {}) as Record<string, any>;
+  // só 2, 3 ou 4 células; qualquer outra coisa (texto, 1S, 6S, NaN) vira o padrão
+  const cells: BatteryCells = bat.cells === 3 ? 3 : bat.cells === 4 ? 4 : DEFAULT_CELLS;
   const angleDeg = num(b.angleDeg, base.blade.angleDeg, 5, 85);
   // v0.1 guardava a ALTURA da lâmina; agora o comprimento ao longo da rampa é o primário
   const legacyLen =
@@ -59,7 +63,11 @@ export function normalizeSpec(raw: unknown): RobotSpec | null {
       freeRpm: num(m.freeRpm, base.motor.freeRpm, 10, 5000),
       stallTorque: num(m.stallTorque, base.motor.stallTorque, 0.005, 2),
       timeConstant: optNum(m.timeConstant, 0.001, 0.08),
+      // robô salvo antes das baterias: tensão do motor = a da bateria (razão 1, rende o mesmo de antes)
+      ratedVoltage: optNum(m.ratedVoltage, 3, 24) ?? BATTERIES.find((x) => x.cells === cells)!.nominal,
+      stallCurrent: optNum(m.stallCurrent, 0.01, 10),
     },
+    battery: { cells },
     mass: num(r.mass, base.mass, 0.05, 2),
     comX: num(r.comX, base.comX, -0.1, 0.1),
     comY: num(r.comY, base.comY, 0.001, 0.15),

@@ -163,6 +163,28 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
 .ed-derived b { display: block; font: 700 1rem var(--mono); }
 .ed-derived span { font-size: .72rem; color: var(--muted); }
 .ed-note { color: var(--muted); font-size: .76rem; margin: 0; }
+/* compatibilidade motor × bateria: cor por nível (só sinaliza, nunca bloqueia) */
+.lvl-ok { --lvl: var(--ok); }
+.lvl-info { --lvl: #7fb2ff; }
+.lvl-warn { --lvl: var(--gold); }
+.lvl-high { --lvl: #ff9a3d; }
+.lvl-critical { --lvl: var(--bad); }
+.chk[class*='lvl-'] i, .chk[class*='lvl-'] b { color: var(--lvl); }
+.compat { border: 1px solid color-mix(in srgb, var(--lvl) 45%, transparent); background: color-mix(in srgb, var(--lvl) 7%, transparent); border-radius: 10px; padding: 10px; display: grid; gap: 8px; min-width: 0; }
+.compat-head { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: .84rem; }
+.compat-head i { color: var(--lvl); display: flex; }
+.compat-head span { color: var(--lvl); font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
+.compat-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 6px; }
+.compat-nums div { background: var(--panel-2); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.compat-nums b { display: block; font: 700 .9rem var(--mono); }
+.compat-nums span { font-size: .68rem; color: var(--muted); line-height: 1.2; display: block; }
+.compat ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.compat li { border-left: 3px solid var(--lvl); padding: 2px 0 2px 8px; font-size: .78rem; line-height: 1.3; overflow-wrap: anywhere; }
+.compat li b { display: block; color: var(--lvl); }
+.compat li span { color: var(--muted); }
+.compat-badge { margin-top: 10px; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; padding: 7px 10px; border-radius: 8px; font-size: .8rem; background: color-mix(in srgb, var(--lvl) 12%, transparent); color: var(--lvl); overflow-wrap: anywhere; }
+.compat-badge i { display: flex; padding-top: 1px; }
+.compat-badge b { font-weight: 700; }
 /* no editor o centro da tela é do canvas: a câmera pode ser controlada com o mouse */
 .ui > .screen.editor { pointer-events: none; }
 .ui > .screen.editor > * { pointer-events: auto; }
@@ -277,6 +299,9 @@ legend { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; co
   .hud-dots i { width: 12px; height: 12px; }
 }
 @media (max-width: 420px) {
+  /* 320 px: o campo numérico + unidade ("kgf·cm") cabem na 3ª coluna do editor */
+  .prm { grid-template-columns: minmax(0, 1fr) minmax(56px, 1fr) auto; gap: 8px; }
+  .num input { width: 54px; }
   /* botões do seletor cabem inteiros até 320 px ("Bot difícil", "Treino (caixa)") */
   .seg button { padding: 9px 3px !important; font-size: .86rem; }
   /* tela estreita: marcadores de ponto descem para baixo do nome em vez de cortá-lo */

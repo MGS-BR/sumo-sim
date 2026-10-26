@@ -3,7 +3,7 @@ import { theoreticalTopSpeed } from './drive';
 import { GRAVITY } from './arena';
 import type { RobotSpec } from './types';
 import { bladeDepth, bladeHeight } from './presets';
-import { MOTOR_DEFAULTS, WHEEL_DEFAULTS, wheelInertia, wheelMass } from './catalog';
+import { MOTOR_DEFAULTS, WHEEL_DEFAULTS, batteryOf, effectiveMotor, wheelInertia, wheelMass } from './catalog';
 
 /**
  * "Caixa de inspeção" do Mini Sumô (500g) — Regulamento RoboCore Art. 4:
@@ -58,7 +58,7 @@ export function wheelieEstimate(spec: RobotSpec, geom = buildRobotGeometry(spec)
   const rearX = Math.min(...geom.wheels.map((w) => w.x));
   const d = spec.comX - rearX;
   if (d <= 0) return 90;
-  const omega = (spec.motor.freeRpm * 2 * Math.PI) / 60;
+  const omega = (effectiveMotor(spec).freeRpm * 2 * Math.PI) / 60;
   const L = geom.wheels.length * wheelInertia(spec).total * omega;
   const m = spec.mass;
   const iCom = (m * (spec.length ** 2 + spec.height ** 2)) / 12;
@@ -100,7 +100,8 @@ export function inspect(spec: RobotSpec): InspectionResult {
 
   const frac = staticWheelLoadFraction(spec, geom);
   const motors = geom.wheels.length;
-  const motorForce = (motors * spec.motor.stallTorque) / spec.wheels.radius;
+  const eff = effectiveMotor(spec);
+  const motorForce = (motors * eff.stallTorque) / spec.wheels.radius;
   const maxTraction = spec.wheels.friction * frac * spec.mass * GRAVITY;
   return {
     ok: checks.every((c) => c.ok),
@@ -108,7 +109,7 @@ export function inspect(spec: RobotSpec): InspectionResult {
     derived: {
       bladeHeight: bladeHeight(spec),
       bladeDepth: bladeDepth(spec),
-      topSpeed: theoreticalTopSpeed(spec.motor.freeRpm, spec.wheels.radius),
+      topSpeed: theoreticalTopSpeed(eff.freeRpm, spec.wheels.radius),
       wheelLoadFraction: frac,
       maxTraction,
       motorForce,
@@ -160,8 +161,10 @@ export const PARAMS: ParamDef[] = [
   { key: 'slipPeak', group: 'Rodas', label: 'Escorregamento no pico', unit: '%', min: 3, max: 40, step: 0.5, toUi: (s) => +((s.wheels.slipPeak ?? WHEEL_DEFAULTS.slipPeak) * 100).toFixed(2), apply: (s, v) => (s.wheels.slipPeak = v / 100), hint: 'Pneu macio chega ao pico com mais escorregamento' },
   { key: 'slideRatio', group: 'Rodas', label: 'Atrito patinando', unit: '%', min: 40, max: 100, step: 1, toUi: (s) => Math.round((s.wheels.slideRatio ?? WHEEL_DEFAULTS.slideRatio) * 100), apply: (s, v) => (s.wheels.slideRatio = v / 100), hint: '% do atrito de pico que sobra com a roda patinando' },
   { key: 'wheelMass', group: 'Rodas', label: 'Massa de cada roda', unit: 'g', min: 2, max: 60, step: 0.5, toUi: (s) => +(wheelMass(s) * 1000).toFixed(2), apply: (s, v) => (s.wheels.mass = v / 1000), hint: 'Cubo + pneu (inércia da roda)' },
-  { key: 'rpm', group: 'Motor', label: 'Rotação livre', unit: 'RPM', min: 100, max: 3500, step: 10, toUi: (s) => s.motor.freeRpm, apply: (s, v) => (s.motor.freeRpm = v) },
-  { key: 'stall', group: 'Motor', label: 'Torque de travamento', unit: 'kgf·cm', min: 0.1, max: 10, step: 0.01, toUi: (s) => +(s.motor.stallTorque / 0.0980665).toFixed(2), apply: (s, v) => (s.motor.stallTorque = v * 0.0980665), hint: 'Por motor (1 motor por roda)' },
+  { key: 'ratedV', group: 'Motor', label: 'Tensão nominal do motor', unit: 'V', min: 3, max: 24, step: 0.1, toUi: (s) => +(s.motor.ratedVoltage ?? batteryOf(s).nominal).toFixed(2), apply: (s, v) => (s.motor.ratedVoltage = v), hint: 'A da ficha do motor. Rotação e torque abaixo valem nela; a bateria escala os dois' },
+  { key: 'rpm', group: 'Motor', label: 'Rotação livre', unit: 'RPM', min: 100, max: 3500, step: 10, toUi: (s) => s.motor.freeRpm, apply: (s, v) => (s.motor.freeRpm = v), hint: 'Na tensão nominal do motor' },
+  { key: 'stall', group: 'Motor', label: 'Torque de travamento', unit: 'kgf·cm', min: 0.1, max: 10, step: 0.01, toUi: (s) => +(s.motor.stallTorque / 0.0980665).toFixed(2), apply: (s, v) => (s.motor.stallTorque = v * 0.0980665), hint: 'Por motor (1 motor por roda), na tensão nominal' },
+  { key: 'stallA', group: 'Motor', label: 'Corrente de travamento', unit: 'A', min: 0, max: 10, step: 0.01, toUi: (s) => +(s.motor.stallCurrent ?? 0).toFixed(2), apply: (s, v) => (s.motor.stallCurrent = v > 0 ? v : undefined), hint: 'Por motor, na tensão nominal. 0 = não informada (sem alertas de corrente)' },
   { key: 'motorTau', group: 'Motor', label: 'Constante de tempo', unit: 'ms', min: 1, max: 60, step: 0.5, toUi: (s) => +((s.motor.timeConstant ?? MOTOR_DEFAULTS.timeConstant) * 1000).toFixed(2), apply: (s, v) => (s.motor.timeConstant = v / 1000), hint: 'Roda no ar até 63% da rotação livre (inércia do rotor). Meça filmando em câmera lenta' },
   { key: 'mass', group: 'Massa', label: 'Massa', unit: 'g', min: 150, max: 600, step: 1, toUi: (s) => Math.round(s.mass * 1000), apply: (s, v) => (s.mass = v / 1000), hint: 'Limite 500 g' },
   { key: 'comX', group: 'Massa', label: 'CG (frente/trás)', unit: 'mm', min: -45, max: 45, step: 0.5, toUi: (s) => m2mm(s.comX), apply: (s, v) => (s.comX = mm2m(v)), hint: '+ = para a frente' },

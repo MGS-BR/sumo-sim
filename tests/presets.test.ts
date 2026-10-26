@@ -6,7 +6,7 @@ import { PHYSICS_HZ } from '../src/sim/modes';
 import { resolveSlots } from '../src/ui/storage';
 import type { Quat } from '../src/sim/types';
 import { robot, softStart } from './fixtures';
-import { applyMotorPreset, applyTirePreset, motorPresetOf } from '../src/sim/catalog';
+import { applyMotorPreset, applyTirePreset, motorPresetOf, recommendedCells } from '../src/sim/catalog';
 import type { RobotSpec } from '../src/sim/types';
 
 /** Valores lidos no editor nas imagens enviadas (unidades da interface). O motor foi trocado depois,
@@ -61,9 +61,11 @@ describe('lista de presets', () => {
       return m!.family;
     });
     expect(new Set(fams)).toEqual(new Set(['N20', 'N30', 'JGA16-050']));
-    expect(motorPresetOf(robot('kunai'))!.id).toBe('jga16-6-32');
+    expect(motorPresetOf(robot('kunai'))!.id).toBe('jga16-12-32');
     expect(motorPresetOf(robot('tora'))!.id).toBe('n30-12-50');
-    expect(motorPresetOf(robot('fuji'))!.id).toBe('n20hp6-50');
+    expect(motorPresetOf(robot('fuji'))!.id).toBe('n20hpcb12-50');
+    // todos na bateria indicada para o motor (docs/ANALISE-BATERIAS.md)
+    expect(PRESETS.map((p) => p.battery?.cells)).toEqual([3, 3, 3]);
   });
 
   it('com motor real nenhum preset dispara o aviso de empinar', () => {
@@ -131,9 +133,11 @@ describe('Tora e Fuji na física', () => {
     expect(big.hi).toBeGreaterThan(small.hi + 10);
   });
 
-  it('o mesmo robô com motor e roda reais do catálogo empina pouco mesmo com largada e inversão secas', async () => {
+  /** pico de inclinação do Tora com JGA16 25:1 e StickyMAX S20, largada e inversão SECAS (sem rampa) */
+  const dryPitch = async (motorId: string, cells: 2 | 3 | 4) => {
     const s = robot('tora');
-    applyMotorPreset(s, 'jga16-6-25');
+    applyMotorPreset(s, motorId);
+    s.battery = { cells };
     applyTirePreset(s, 'stickymax-s20');
     s.width = 0.099;
     const R = await loadRapier();
@@ -149,7 +153,20 @@ describe('Tora e Fuji na física', () => {
         hi = Math.max(hi, Math.abs(pitch(w.robotState(0).rotation)));
       }
     w.dispose();
-    expect(hi).toBeLessThan(15);
+    return hi;
+  };
+
+  it('o mesmo robô com motor e roda reais do catálogo, na tensão certa, empina pouco mesmo com largada e inversão secas', async () => {
+    // JGA16 de 12 V na 3S (a bateria indicada: 0,93× nominal, 1,05× cheia)
+    expect(recommendedCells(12)).toBe(3);
+    expect(await dryPitch('jga16-12-25', 3)).toBeLessThan(15);
+  });
+
+  it('sobretensão (JGA16 de 6 V na 2S, 1,23× nominal) empina mais na largada seca, mas não capota', async () => {
+    const ok = await dryPitch('jga16-12-25', 3);
+    const over = await dryPitch('jga16-6-25', 2);
+    expect(over).toBeGreaterThan(ok);
+    expect(over).toBeLessThan(30);
   });
 });
 

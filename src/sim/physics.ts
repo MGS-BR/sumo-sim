@@ -2,7 +2,7 @@ import RAPIER from '@dimforge/rapier3d-deterministic-compat';
 import { ARENA, GRAVITY } from './arena';
 import { buildRobotGeometry, type RobotGeometry } from './geometry';
 import { stepWheel, type TireParams } from './drive';
-import { WHEEL_DEFAULTS, wheelInertia } from './catalog';
+import { WHEEL_DEFAULTS, effectiveMotor, wheelInertia } from './catalog';
 import { PHYSICS_DT } from './modes';
 import { add, cross, dot, norm, quatFromYaw, rotate, scale, sub, v3, yawOf } from './math';
 import type { DriveCommand, Pose2D, Quat, RobotSpec, RobotState, SimSnapshot, Vec3, WheelState } from './types';
@@ -57,6 +57,8 @@ interface RobotRuntime {
   colliders: Collider[];
   wheels: WheelRuntime[];
   freeOmega: number;
+  /** torque de travamento efetivo (na bateria escolhida), por motor (N·m) */
+  stallTorque: number;
   /** inércia de rotação de cada roda (kg·m²): roda + rotor refletido */
   wheelInertia: number;
   tire: TireParams;
@@ -171,8 +173,11 @@ export class SumoWorld {
         ),
       );
     }
-    const freeOmega = (spec.motor.freeRpm * 2 * Math.PI) / 60;
+    // o motor como ele trabalha na bateria escolhida (rotação e torque × V_bateria/V_motor)
+    const motor = effectiveMotor(spec);
+    const freeOmega = (motor.freeRpm * 2 * Math.PI) / 60;
     return {
+      stallTorque: motor.stallTorque,
       spec,
       geom,
       body,
@@ -307,12 +312,12 @@ export class SumoWorld {
         omega: wr.omega,
         radius: wg.radius,
         freeOmega: r.freeOmega,
-        stallTorque: r.spec.motor.stallTorque,
+        stallTorque: r.stallTorque,
         inertia: r.wheelInertia,
         tire: r.tire,
         effMass,
         dt,
-        holdTorque: PHYS.gearboxHold * r.spec.motor.stallTorque,
+        holdTorque: PHYS.gearboxHold * r.stallTorque,
       });
       /** reação no chassi: o motor que acelera o rotor/roda empurra o chassi ao contrário */
       const react = (omegaNew: number, axis: Vec3) => {

@@ -4,6 +4,7 @@ import { PRESETS } from '../src/sim/presets';
 import { robot, softStart } from './fixtures';
 import { inspect } from '../src/sim/inspection';
 import { theoreticalTopSpeed } from '../src/sim/drive';
+import { effectiveMotor } from '../src/sim/catalog';
 import { PHYSICS_HZ } from '../src/sim/modes';
 import { ARENA } from '../src/sim/arena';
 import { constrainPlacement, defaultPlacement, footprint, nudgePlacement, placementIssue, PLACEMENT_LINE_X } from '../src/sim/placement';
@@ -72,7 +73,8 @@ describe('física do robô', () => {
       }
     });
     const spec = w.robots[0].spec;
-    const vt = theoreticalTopSpeed(spec.motor.freeRpm, spec.wheels.radius);
+    // rotação na bateria do robô (a ficha vale na tensão nominal do motor)
+    const vt = theoreticalTopSpeed(effectiveMotor(spec).freeRpm, spec.wheels.radius);
     expect(sum / n).toBeGreaterThan(vt * 0.9);
     expect(sum / n).toBeLessThan(vt * 1.02);
     w.dispose();

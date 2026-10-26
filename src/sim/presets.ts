@@ -5,7 +5,13 @@ import { MOTOR_PRESETS } from './catalog';
 function catalogMotor(id: string): RobotSpec['motor'] {
   const m = MOTOR_PRESETS.find((p) => p.id === id);
   if (!m) throw new Error(`motor fora do catálogo: ${id}`);
-  return { freeRpm: m.freeRpm, stallTorque: m.stallKgfcm * 0.0980665, timeConstant: m.timeConstant };
+  return {
+    freeRpm: m.freeRpm,
+    stallTorque: m.stallKgfcm * 0.0980665,
+    timeConstant: m.timeConstant,
+    ratedVoltage: m.voltage,
+    stallCurrent: m.stallCurrent,
+  };
 }
 
 /**
@@ -27,8 +33,10 @@ export const PRESETS: RobotSpec[] = [
     groundClearance: 0.003,
     blade: { angleDeg: 28, length: 0.0256, width: 0.098, edgeClearance: 0, friction: 0.2 },
     wheels: { count: 2, radius: 0.016, width: 0.012, friction: 1.1, covered: true, wellGap: 0.002 },
-    // JGA16-050 6 V 32:1 — melhor encaixe para a cunha (docs/ANALISE-ROBOS.md, "Motor de cada preset")
-    motor: catalogMotor('jga16-6-32'),
+    // JGA16-050 32:1 — melhor encaixe para a cunha (docs/ANALISE-ROBOS.md, "Motor de cada preset").
+    // Versão de 12 V na 3S: compatível e venceu a de 6 V na 2S por 8 × 2 (docs/ANALISE-BATERIAS.md)
+    motor: catalogMotor('jga16-12-32'),
+    battery: { cells: 3 },
     mass: 0.495,
     comX: -0.009,
     comY: 0.013,
@@ -49,7 +57,9 @@ export const PRESETS: RobotSpec[] = [
     blade: { angleDeg: 15, length: 0.0205, width: 0.0995, edgeClearance: 0.0002, friction: 0.2 },
     wheels: { count: 2, radius: 0.013, width: 0.014, friction: 1.1, covered: true, wellGap: 0.002 },
     // N30 12 V 50:1 — venceu 83% contra o painel; era 670 RPM / 4,4 kgf·cm (5–10× um motor real)
+    // 3S: compatível (1,05× cheia) e a melhor das três baterias (docs/ANALISE-BATERIAS.md)
     motor: catalogMotor('n30-12-50'),
+    battery: { cells: 3 },
     mass: 0.498,
     comX: -0.014,
     comY: 0.02,
@@ -69,8 +79,10 @@ export const PRESETS: RobotSpec[] = [
     groundClearance: 0.004,
     blade: { angleDeg: 15, length: 0.02, width: 0.099, edgeClearance: 0.0002, friction: 0.2 },
     wheels: { count: 2, radius: 0.011, width: 0.011, friction: 1.1, covered: true, wellGap: 0.003 },
-    // N20 HP 6 V 50:1 — era 400 RPM / 3,7 kgf·cm
-    motor: catalogMotor('n20hp6-50'),
+    // N20 50:1 — era 400 RPM / 3,7 kgf·cm. Versão HPCB 12 V na 3S: compatível e a de maior taxa
+    // de vitória entre as baterias (a HP 6 V na 2S fica em sobretensão moderada; docs/ANALISE-BATERIAS.md)
+    motor: catalogMotor('n20hpcb12-50'),
+    battery: { cells: 3 },
     mass: 0.498,
     comX: -0.0155,
     comY: 0.02,

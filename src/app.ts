@@ -12,7 +12,22 @@ import type { RobotSpec } from './sim/types';
 import { allRobots, isPreset, resolveSlots, loadCustomRobots, loadSettings, newRobotId, saveCustomRobots, saveSettings } from './ui/storage';
 import { PRESETS } from './sim/presets';
 import { TRAINING_BOX, boxDragForce, trainingBox } from './sim/training';
-import { MOTOR_PRESETS, TIRE_PRESETS, applyMotorPreset, applyTirePreset, motorLabel, motorPresetOf, tirePresetOf } from './sim/catalog';
+import {
+  BATTERIES,
+  COMPAT_LIMITS,
+  MOTOR_PRESETS,
+  TIRE_PRESETS,
+  applyMotorPreset,
+  applyTirePreset,
+  compatibility,
+  lineCompat,
+  motorLabel,
+  motorPresetOf,
+  recommendedCells,
+  tirePresetOf,
+  type CompatLevel,
+  type Compatibility,
+} from './sim/catalog';
 import { icon, kbdArrow } from './ui/icons';
 
 interface Settings {
@@ -331,11 +346,13 @@ export class App {
   private sheet(spec: RobotSpec) {
     const r = inspect(spec);
     const d = r.derived;
+    const c = compatibility(spec);
     const rows: [string, string][] = [
       ['Dimensões', `${fmtMm(spec.length)} × ${fmtMm(spec.width)} × ${fmtMm(spec.height)} mm`],
       ['Massa', `${fmt(spec.mass * 1000)} g`],
       ['Rodas', `${spec.wheels.count} × Ø${fmtMm(spec.wheels.radius * 2)} mm · μ ${fmt(spec.wheels.friction, 2)}`],
-      ['Motor', `${fmt(spec.motor.freeRpm)} RPM · ${fmt(spec.motor.stallTorque / 0.0980665, 1)} kgf·cm`],
+      ['Motor', `${fmt(c.freeRpm)} RPM · ${fmt(c.stallKgfcm, 1)} kgf·cm <small>(na ${c.battery.label})</small>`],
+      ['Bateria', `LiPo ${c.battery.label} · ${fmt(c.battery.nominal, 1)} V`],
       ['Lâmina', `${fmt(spec.blade.angleDeg)}° · ${fmtMm(spec.blade.length)} × ${fmtMm(spec.blade.width)} mm`],
       ['Altura / aresta', `${fmt(d.bladeHeight * 1000, 1)} mm · folga ${fmt(spec.blade.edgeClearance * 1000, 2)} mm`],
       ['Velocidade máx.', `${fmt(d.topSpeed, 2)} m/s`],
@@ -344,9 +361,10 @@ export class App {
     ];
     const m = motorPresetOf(spec);
     const t = tirePresetOf(spec);
-    if (m || t) rows.splice(4, 0, ['Peças', esc([m ? `${m.family} ${m.line} ${m.ratio}:1` : '', t ? t.label.split(' · ')[0] : ''].filter(Boolean).join(' · '))]);
+    if (m || t) rows.splice(5, 0, ['Peças', esc([m ? `${m.family} ${m.line} ${m.ratio}:1` : '', t ? t.label.split(' · ')[0] : ''].filter(Boolean).join(' · '))]);
     if (d.wheelieDeg > WHEELIE_WARN_DEG) rows.push(['Largada seca', `empina ~${fmt(d.wheelieDeg)}° <small>(sem rampa)</small>`]);
     return `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      ${compatBadge(c)}
       <div class="insp ${r.ok ? 'ok' : 'bad'}">${r.ok ? icon('check') + ' Aprovado na inspeção' : icon('x') + ' Reprovado: ' + r.checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}</div>`;
   }
 
@@ -371,7 +389,7 @@ export class App {
         </div>
         <div class="ed-groups">${groups
           .map(
-            (g) => `<fieldset><legend>${g}</legend>${g === 'Motor' ? this.presetRow('motor') : g === 'Rodas' ? this.presetRow('tire') : ''}${PARAMS.filter((p) => p.group === g)
+            (g) => `<fieldset><legend>${g}</legend>${g === 'Motor' ? this.batteryRow() + this.presetRow('motor') + '<div class="compat" aria-live="polite"></div>' : g === 'Rodas' ? this.presetRow('tire') : ''}${PARAMS.filter((p) => p.group === g)
               .map((p) => this.paramRow(p, spec))
               .join('')}</fieldset>`,
           )
@@ -426,6 +444,14 @@ export class App {
       scr.querySelector('[data-preset=motor] small')!.textContent = m
         ? `${m.family} ${m.line} · ${fmt(m.stallKgfcm, 2)} kgf·cm · ${fmt(m.stallCurrent, 2)} A travado · ${fmt(m.massG, 1)} g cada`
         : 'valores livres';
+      // bateria: o select mostra a atual; as linhas de motor dizem como combinam com ela
+      const bs = scr.querySelector<HTMLSelectElement>('[data-preset=battery] select')!;
+      const cells = spec.battery?.cells ?? 2;
+      if (document.activeElement !== bs) bs.value = String(cells);
+      ms.querySelectorAll('optgroup').forEach((og) => {
+        const v = +og.dataset.voltage!;
+        og.label = `${og.dataset.line} · ${lineNote(v, cells)}`;
+      });
       scr.querySelector('[data-preset=tire] small')!.textContent = t
         ? `silicone ${t.shoreA} Shore A · ${fmt(t.mass * 1000)} g cada`
         : 'valores livres';
@@ -437,6 +463,12 @@ export class App {
         .map((c) => `<div class="chk ${c.note ? 'note' : c.ok ? 'ok' : 'bad'}"><i>${icon(c.note ? 'flag' : c.ok ? 'check' : 'x')}</i><b>${c.label}</b><span>${esc(c.detail)}</span></div>`)
         .join('');
       const d = r.derived;
+      const c = compatibility(spec);
+      scr.querySelector('.compat')!.outerHTML = compatPanel(c);
+      scr.querySelector('.ed-insp')!.insertAdjacentHTML(
+        'afterbegin',
+        `<div class="chk lvl-${c.level}"><i>${icon(c.level === 'ok' ? 'check' : 'flag')}</i><b>Motor × bateria</b><span>${esc(c.summary)}</span></div>`,
+      );
       scr.querySelector('.ed-derived')!.innerHTML = `
         <div><b>${fmt(d.topSpeed, 2)}</b><span>m/s máx.</span></div>
         <div><b>${fmt(d.wheelLoadFraction * 100)}%</b><span>peso nas rodas</span></div>
@@ -472,6 +504,11 @@ export class App {
         const kind = sel.closest<HTMLElement>('.prm-select')!.dataset.preset;
         // só ids do catálogo são aplicados; "Personalizado" mantém os valores atuais
         if (kind === 'motor') applyMotorPreset(spec, sel.value);
+        else if (kind === 'battery') {
+          // só 2, 3 ou 4: qualquer outro valor (DOM adulterado) é ignorado
+          const n = +sel.value;
+          if (n === 2 || n === 3 || n === 4) spec.battery = { cells: n };
+        }
         else if (kind === 'tire') applyTirePreset(spec, sel.value);
         refresh();
       }),
@@ -521,6 +558,17 @@ export class App {
     });
   }
 
+  /** Bateria LiPo: 2S, 3S ou 4S. Escolher nunca é bloqueado; a compatibilidade só avisa */
+  private batteryRow() {
+    const opts = BATTERIES.map(
+      (b) => `<option value="${b.cells}">${b.label} · ${fmt(b.nominal, 1)} V (${fmt(b.full, 1)} V cheia)</option>`,
+    ).join('');
+    return `<div class="prm prm-select" data-preset="battery">
+      <label>Bateria LiPo<small>não descarrega na luta</small></label>
+      <select aria-label="Bateria LiPo">${opts}</select>
+    </div>`;
+  }
+
   /** Linha de escolha de preset (motor ou pneu) — opções vêm do catálogo, nada do usuário */
   private presetRow(kind: 'motor' | 'tire') {
     let options = '';
@@ -529,7 +577,7 @@ export class App {
       options = lines
         .map(
           (l) =>
-            `<optgroup label="${esc(l)}">${MOTOR_PRESETS.filter((m) => `${m.family} ${m.line}` === l)
+            `<optgroup label="${esc(l)}" data-line="${esc(l)}" data-voltage="${MOTOR_PRESETS.find((m) => `${m.family} ${m.line}` === l)!.voltage}">${MOTOR_PRESETS.filter((m) => `${m.family} ${m.line}` === l)
               .map((m) => `<option value="${esc(m.id)}">${esc(motorLabel(m))}</option>`)
               .join('')}</optgroup>`,
         )
@@ -640,4 +688,51 @@ export class App {
     r.querySelector('[data-act=select]')!.addEventListener('click', () => this.showSelect());
     r.querySelector('[data-act=menu]')!.addEventListener('click', () => this.showMenu());
   }
+}
+
+/* ───────────── compatibilidade motor × bateria (só sinaliza, nunca bloqueia) ───────────── */
+
+const LEVEL_WORD: Record<CompatLevel, string> = {
+  ok: 'compatível',
+  info: 'compatível',
+  warn: 'atenção',
+  high: 'risco',
+  critical: 'crítico',
+};
+
+/** como a linha do catálogo combina com a bateria escolhida (rótulo do grupo no select de motor) */
+function lineNote(voltage: number, cells: 2 | 3 | 4) {
+  const b = BATTERIES.find((x) => x.cells === cells)!;
+  const lvl = lineCompat(voltage, cells);
+  const ideal = recommendedCells(voltage);
+  const kFull = b.full / voltage;
+  const what =
+    lvl === 'ok' ? 'compatível'
+    : kFull > COMPAT_LIMITS.ok ? `${LEVEL_WORD[lvl]}: sobretensão ${fmt(kFull, 2)}×`
+    : `${LEVEL_WORD[lvl]}: subtensão ${fmt((b.nominal / voltage) * 100)}%`;
+  return `${what} na ${cells}S${ideal !== cells ? ` (ideal ${ideal}S)` : ''}`;
+}
+
+/** selo compacto da ficha do robô (tela de seleção) */
+function compatBadge(c: Compatibility) {
+  const main = c.alerts.find((a) => a.level === c.level) ?? c.alerts[0];
+  return `<div class="compat-badge lvl-${c.level}" title="${esc(main.text)}"><i>${icon(c.level === 'ok' ? 'check' : 'flag')}</i><span><b>Motor × bateria:</b> ${esc(c.summary)}</span></div>`;
+}
+
+/** painel do editor: números efetivos e todos os alertas */
+function compatPanel(c: Compatibility) {
+  const nums: [string, string][] = [
+    [`${fmt(c.freeRpm)} RPM`, 'rotação livre na bateria'],
+    [`${fmt(c.stallKgfcm, 2)} kgf·cm`, 'torque travado por motor'],
+    [c.ratedVoltage ? `${fmt(c.kFull, 2)}×` : '—', 'tensão cheia ÷ do motor'],
+    [c.ratedVoltage ? `${fmt(c.heat, 1)}×` : '—', 'calor travado'],
+  ];
+  if (c.totalStallCurrentFull !== undefined)
+    nums.push([`${fmt(c.totalStallCurrentFull, 1)} A`, `${c.motors} motores travados (bateria ${fmt(c.batteryMaxCurrent, 1)} A)`]);
+  nums.push([`${c.battery.massG} g`, `pack ${c.battery.capacityMah} mAh ${c.battery.cRating}C (já na massa total)`]);
+  return `<div class="compat lvl-${c.level}" aria-live="polite">
+    <div class="compat-head"><i>${icon(c.level === 'ok' ? 'check' : 'flag')}</i><b>Motor × bateria ${esc(c.battery.label)}</b><span>${esc(LEVEL_WORD[c.level])}</span></div>
+    <div class="compat-nums">${nums.map(([v, k]) => `<div><b>${v}</b><span>${k}</span></div>`).join('')}</div>
+    <ul>${c.alerts.map((a) => `<li class="lvl-${a.level}"><b>${esc(a.title)}</b><span>${esc(a.text)}</span></li>`).join('')}</ul>
+  </div>`;
 }

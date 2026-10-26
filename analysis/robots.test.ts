@@ -8,6 +8,7 @@ import { loadRapier, SumoWorld } from '../src/sim/physics';
 import { PRESETS } from '../src/sim/presets';
 import { inspect } from '../src/sim/inspection';
 import { theoreticalTopSpeed } from '../src/sim/drive';
+import { effectiveMotor } from '../src/sim/catalog';
 import { MODES, PHYSICS_DT, PHYSICS_HZ } from '../src/sim/modes';
 import { Match } from '../src/sim/match';
 import { SparringBot } from '../src/control/sparringBot';
@@ -30,7 +31,7 @@ function solo(R: R, spec: RobotSpec) {
   const run = (sec: number, f?: () => void) => { for (let i = 0; i < sec * PHYSICS_HZ; i++) { w.step(); f?.(); } };
   run(0.4);
   const rest = w.robotState(0).wheelLoadRatio;
-  const vt = theoreticalTopSpeed(spec.motor.freeRpm, spec.wheels.radius);
+  const vt = theoreticalTopSpeed(effectiveMotor(spec).freeRpm, spec.wheels.radius);
   // largada com partida suave (como teclado/bot) e depois inversão para ré, também suave
   const ramp = softStart();
   let t90 = -1, t = 0, dist = 0, t20 = -1, pitchUp = 0, pitchDown = 0;
@@ -172,8 +173,8 @@ it('análise dos presets', async () => {
   out.push('## Duelo frontal (100% desde o bip, 9 largadas)\n' + fmt(pairs.map(([a, b]) => series(R, robot(a), robot(b)))));
 
   // o que faz o Fuji vencer o Tora? isola um fator por vez no Tora
-  const fujiTop = theoreticalTopSpeed(robot('fuji').motor.freeRpm, robot('fuji').wheels.radius);
-  const toraTop = theoreticalTopSpeed(robot('tora').motor.freeRpm, robot('tora').wheels.radius);
+  const fujiTop = theoreticalTopSpeed(effectiveMotor(robot('fuji')).freeRpm, robot('fuji').wheels.radius);
+  const toraTop = theoreticalTopSpeed(effectiveMotor(robot('tora')).freeRpm, robot('tora').wheels.radius);
   const vars = [
     variant('tora', 'Tora com a velocidade do Fuji', (s) => (s.motor.freeRpm = Math.round((s.motor.freeRpm * fujiTop) / toraTop))),
     variant('tora', 'Tora com frente a 60°', (s) => (s.frontAngleDeg = 60)),

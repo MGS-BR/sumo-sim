@@ -4,6 +4,8 @@
  * no Node (testes) e futuramente num servidor (modo online).
  */
 
+export type BatteryCells = 2 | 3 | 4;
+
 /** Especificação de um robô. Unidades SI (m, kg, N·m). A UI converte para mm/g. */
 export interface RobotSpec {
   id: string;
@@ -56,14 +58,22 @@ export interface RobotSpec {
   };
 
   motor: {
-    /** Rotação livre no eixo de saída (após redução), na tensão de operação */
+    /** Rotação livre no eixo de saída (após redução), na tensão NOMINAL do motor (ratedVoltage) */
     freeRpm: number;
-    /** Torque de travamento no eixo de saída, por motor (N·m). 1 kgf·cm = 0,0981 N·m */
+    /** Torque de travamento no eixo de saída, por motor, na tensão nominal (N·m). 1 kgf·cm = 0,0981 N·m */
     stallTorque: number;
     /** Constante de tempo mecânica no eixo de saída (s): quanto o rotor, refletido pela
      *  redução, demora para acelerar. Padrão 15 ms */
     timeConstant?: number;
+    /** Tensão nominal do motor (V): freeRpm e stallTorque valem nela. Ausente = a da bateria
+     *  (o motor rende exatamente o que está escrito acima) */
+    ratedVoltage?: number;
+    /** Corrente de travamento por motor na tensão nominal (A). Só alertas; ausente = desconhecida */
+    stallCurrent?: number;
   };
+
+  /** Bateria LiPo: 2S, 3S ou 4S. Não descarrega durante a luta; ausente = 2S */
+  battery?: { cells: BatteryCells };
 
   /** Massa total (kg) — limite 0,500 */
   mass: number;

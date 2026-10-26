@@ -9,18 +9,20 @@ import { Match } from '../src/sim/match';
 import { MODES, PHYSICS_DT, PHYSICS_HZ } from '../src/sim/modes';
 import { inspect } from '../src/sim/inspection';
 import { theoreticalTopSpeed } from '../src/sim/drive';
-import { MOTOR_PRESETS, applyMotorPreset, applyTirePreset, wheelInertia } from '../src/sim/catalog';
+import { MOTOR_PRESETS, applyMotorPreset, applyTirePreset, effectiveMotor, recommendedCells, wheelInertia } from '../src/sim/catalog';
 import { EMPTY_FRAME, type ControlFrame, type Quat, type RobotSpec } from '../src/sim/types';
 import { robot, softStart } from '../tests/fixtures';
 
 type R = Awaited<ReturnType<typeof loadRapier>>;
 const pitch = (q: Quat) => (Math.asin(Math.max(-1, Math.min(1, 2 * (q.x * q.y + q.w * q.z)))) * 180) / Math.PI;
 
-/** Robô de referência: corpo do Fuji (99 × 99 × 60, 2 rodas, CG −15,5 mm), roda StickyMAX */
+/** Robô de referência: corpo do Fuji (99 × 99 × 60, 2 rodas, CG −15,5 mm), roda StickyMAX,
+ *  cada motor na bateria indicada para ele (6 V → 2S, 12 V → 3S) */
 function ref(motorId: string, tireId = 'stickymax-s20'): RobotSpec {
   const s = robot('fuji');
   s.name = motorId;
   applyMotorPreset(s, motorId);
+  s.battery = { cells: recommendedCells(MOTOR_PRESETS.find((m) => m.id === motorId)!.voltage) };
   applyTirePreset(s, tireId);
   return s;
 }
@@ -92,8 +94,10 @@ it('análise de motores e rodas', async () => {
     const soft = solo(R, s, true);
     return {
       motor: `${m.family} ${m.line} ${m.ratio}:1`,
+      bateria: `${s.battery!.cells}S`,
+      rpmNaBateria: effectiveMotor(s).freeRpm.toFixed(0),
       legal: ins.ok ? 'sim' : 'não',
-      vMax: theoreticalTopSpeed(m.freeRpm, s.wheels.radius).toFixed(2),
+      vMax: theoreticalTopSpeed(effectiveMotor(s).freeRpm, s.wheels.radius).toFixed(2),
       motorN: ins.derived.motorForce.toFixed(1),
       tracaoN: ins.derived.maxTraction.toFixed(1),
       massaRotorKg: (J.motor / s.wheels.radius ** 2).toFixed(2),
@@ -104,7 +108,7 @@ it('análise de motores e rodas', async () => {
       patinaMax: soft.slipMax.toFixed(2),
     };
   });
-  out.push('## Motores no robô de referência (corpo do Fuji, StickyMAX S20)\n' + fmt(rows));
+  out.push('## Motores no robô de referência (corpo do Fuji, StickyMAX S20, bateria indicada para cada motor)\n' + fmt(rows));
 
   const pick = (id: string, tire = 'stickymax-s20', name?: string) => {
     const s = ref(id, tire);
@@ -130,6 +134,7 @@ it('análise de motores e rodas', async () => {
     ['n20hp6-50', 'N20 HP 50:1'],
     ['n20hp6-100', 'N20 HP 100:1'],
     ['n20mp6-50', 'N20 MP 50:1'],
+    ['n20hpcb12-50', 'N20 HPCB 12V 50:1'],
     ['n30-12-30', 'N30 12V 30:1'],
     ['jga16-6-25', 'JGA16 25:1'],
     ['jga16-6-45', 'JGA16 45:1'],

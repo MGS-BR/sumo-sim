@@ -1,10 +1,12 @@
 # Rodas e motores — pesquisa, modelo e análise
 
-Reproduzir: `npm run analise` (cerca de 7 min). Código em `analysis/wheels.test.ts`.
+Reproduzir: `npm run analise` (cerca de 8 min). Código em `analysis/wheels.test.ts`.
 
 ## 1. Presets de motor
 
-Valores das folhas de dados dos fabricantes, no eixo de saída e na tensão nominal. No editor ficam em **Motor → Motor do catálogo**.
+Valores das folhas de dados dos fabricantes, no eixo de saída e **na tensão nominal do motor**. No editor ficam em **Motor → Motor do catálogo**.
+
+**Com bateria:** a simulação multiplica rotação, torque e corrente por V_bateria ÷ V_motor (LiPo a 3,7 V por célula). Exemplos: um motor de 6 V na 2S rende 1,23×; um de 12 V na 3S rende 0,925×. O catálogo só tem linhas que alguma bateria 2S/3S/4S alimenta com no máximo sobretensão moderada (cheia ≤ 1,5×). Por isso o N30 5 V saiu e entraram o N20 HPCB 12 V e o JGA16-050 12 V. Detalhes e alertas em [ANALISE-BATERIAS.md](ANALISE-BATERIAS.md).
 
 ### N20
 
@@ -38,6 +40,22 @@ O formato N20 (redução de 10 × 12 mm) não tem uma folha de dados única. Por
 - Corrente de travamento: 0,67 A.
 - Representa o N20 genérico: o GA12-N20 da [Handsontec](https://www.handsontec.com/dataspecs/motor_fan/GA12-N20.pdf) também trava com 0,67 A. Os pontos 450 RPM/0,54 kgf·cm e 200 RPM/0,94 kgf·cm dele batem com o 50:1 e o 100:1 desta linha.
 
+**N20 HPCB 12 V** (linha HPCB 12V da mesma página da Pololu; escovas de carvão, de vida longa; para 3S):
+
+| Redução | Rotação livre | Travamento |
+|---|---|---|
+| 10:1 | 3400 RPM | 0,17 kgf·cm |
+| 15:1 | 2200 RPM | 0,25 kgf·cm |
+| 30:1 | 1100 RPM | 0,39 kgf·cm |
+| 50:1 | 650 RPM | 0,67 kgf·cm |
+| 75:1 | 450 RPM | 1,0 kgf·cm |
+| 100:1 | 330 RPM | 1,3 kgf·cm |
+| 150:1 | 220 RPM | 1,8 kgf·cm |
+| 210:1 | 160 RPM | 2,5 kgf·cm |
+
+- Corrente de travamento: 0,75 A. Massa: 9,5 g.
+- Constante de tempo: 18 ms, estimada como a da linha MP (corrente baixa, rotor de mais espiras).
+
 ### N30
 
 **N30 12 V** ([NFP-GM12-N30-1216](https://nfpmotor.com/12mm-metal-gear-motor-model-nfp-gm12-n30), motor de 16 000 RPM):
@@ -52,16 +70,7 @@ O formato N20 (redução de 10 × 12 mm) não tem uma folha de dados única. Por
 
 - Corrente de travamento: 0,6 A.
 
-**N30 5 V** ([KS-GM12-N30](https://www.motormicro.com/product/12-20mm-n30-gear-motor-5-12v-dc-10200-17000rpm-gearbox-27-567rpm-d-shaft-ks-gm12-n30), motor de 17 000 RPM):
-
-| Redução | Rotação livre | Travamento |
-|---|---|---|
-| 30:1 | 567 RPM | 0,60 kgf·cm |
-| 50:1 | 340 RPM | 0,85 kgf·cm |
-| 100:1 | 170 RPM | 1,70 kgf·cm |
-| 150:1 | 113 RPM | 2,13 kgf·cm |
-
-- Corrente de travamento: 1,3 A.
+**N30 5 V: removido** ([KS-GM12-N30](https://www.motormicro.com/product/12-20mm-n30-gear-motor-5-12v-dc-10200-17000rpm-gearbox-27-567rpm-d-shaft-ks-gm12-n30), 30:1 a 150:1, 1,3 A travado). Nenhuma bateria serve: a menor, 2S, dá 8,4 V cheia, 1,68× a tensão do motor.
 
 **Observações sobre o N30:**
 - O fabricante marca os valores como provisórios.
@@ -69,7 +78,7 @@ O formato N20 (redução de 10 × 12 mm) não tem uma folha de dados única. Por
 
 ### JGA16-050
 
-**JGA16-050 6 V** ([NFP-JGA16-050-06120](https://microdcmotors.com/product/6v-12v-micro-metal-gearmotor-model-nfp-gm16-050sh)):
+**JGA16-050 6 V e 12 V** ([NFP-JGA16-050-06120 e -12120](https://microdcmotors.com/product/6v-12v-micro-metal-gearmotor-model-nfp-gm16-050sh)). As duas têm a mesma tabela, cada uma na sua tensão:
 
 | Redução | Rotação livre | Travamento |
 |---|---|---|
@@ -81,8 +90,8 @@ O formato N20 (redução de 10 × 12 mm) não tem uma folha de dados única. Por
 | 63:1 | 190 RPM | 1,4 kgf·cm |
 | 100:1 | 120 RPM | 2,3 kgf·cm |
 
-- Corrente de travamento: 2 A. Massa: ~30 g.
-- A versão de 12 V tem a mesma rotação e o mesmo torque, com metade da corrente.
+- Corrente de travamento: 2 A na de 6 V e 1 A na de 12 V. Massa: ~30 g.
+- As duas estão no catálogo: a de 6 V serve na 2S e a de 12 V na 3S.
 
 **Atenção a anúncios:** lojas anunciam o JGA16-050 com "torque 0,53–5 kg·cm" ([exemplo](https://othoba.com/dc-6v-600rpm-micro-metal-gear-motor-jga16-050-udvabony-bd-474494)). Essa é a faixa da FAMÍLIA inteira, das reduções mais baixas às mais altas, e não de um motor. A ~600 RPM, o travamento real fica perto de 0,5 kgf·cm.
 
@@ -137,51 +146,60 @@ O modelo antigo não tinha inércia da roda nem curva de atrito por escorregamen
 
 ### Motores no mesmo robô
 
-Robô de referência: corpo do Fuji, CG −15,5 mm, roda S20.
+Robô de referência: corpo do Fuji, CG −15,5 mm, roda S20. **Cada motor na bateria indicada para ele:** os de 6 V na 2S (1,23× a ficha) e os de 12 V na 3S (0,925×). A tabela completa, com todas as reduções, sai no `npm run analise`.
 
-| Motor | Vel. máx. | Força motores / tração | 20 cm em | Empina (suave / seca) |
-|---|---|---|---|---|
-| N20 HP 30:1 | 1,68 m/s | 7,0 / 2,8 N | 0,28 s | 2° / 4° |
-| N20 HP 50:1 | 0,99 m/s | 10,5 / 2,8 N | 0,31 s | 4° / 12° |
-| N20 HP 100:1 | 0,52 m/s | 20,8 / 2,8 N | 0,46 s | 7° / 16° |
-| N20 HP 210:1 | 0,25 m/s | 36,8 / 2,8 N | 0,88 s | 14° / 19° |
-| N20 MP 50:1 | 0,70 m/s | 6,6 / 2,8 N | 0,41 s | 0° / 2° |
-| N30 12 V 30:1 | 0,89 m/s | 12,3 / 2,8 N | 0,32 s | 3° / 8° |
-| N30 12 V 100:1 | 0,27 m/s | 36,8 / 2,8 N | 0,81 s | 3° / 15° |
-| JGA16 25:1 | 0,80 m/s | 8,0 / 2,8 N | 0,36 s | 0° / 7° |
-| JGA16 45:1 | 0,45 m/s | 12,3 / 2,8 N | 0,54 s | 1° / 11° |
-| JGA16 100:1 | 0,20 m/s | 28,2 / 2,8 N | 1,09 s | 13° / 19° |
+| Motor | Bateria | RPM na bateria | Vel. máx. | Força motores / tração | 20 cm em | Empina (suave / seca) |
+|---|---|---|---|---|---|---|
+| N20 HP 6 V 30:1 | 2S | 1233 | 2,07 m/s | 8,6 / 2,8 N | 0,27 s | 8° / 12° |
+| N20 HP 6 V 50:1 | 2S | 728 | 1,22 m/s | 13,0 / 2,8 N | 0,30 s | 13° / 14° |
+| N20 HP 6 V 100:1 | 2S | 382 | 0,64 m/s | 25,7 / 2,8 N | 0,41 s | 15° / 20° |
+| N20 HP 6 V 210:1 | 2S | 185 | 0,31 m/s | 45,4 / 2,8 N | 0,79 s | 18° / 25° |
+| N20 MP 6 V 50:1 | 2S | 518 | 0,87 m/s | 8,2 / 2,8 N | 0,35 s | 1° / 7° |
+| N20 HPCB 12 V 30:1 | 3S | 1017 | 1,70 m/s | 4,4 / 2,8 N | 0,32 s | 0° / 0° |
+| N20 HPCB 12 V 50:1 | 3S | 601 | 1,01 m/s | 7,6 / 2,8 N | 0,33 s | 1° / 7° |
+| N20 HPCB 12 V 100:1 | 3S | 305 | 0,51 m/s | 14,7 / 2,8 N | 0,47 s | 3° / 15° |
+| N30 12 V 30:1 | 3S | 490 | 0,82 m/s | 11,3 / 2,8 N | 0,34 s | 2° / 6° |
+| N30 12 V 100:1 | 3S | 148 | 0,25 m/s | 34,0 / 2,8 N | 0,87 s | 2° / 14° |
+| JGA16 6 V 25:1 | 2S | 592 | 0,99 m/s | 9,8 / 2,8 N | 0,32 s | 5° / 14° |
+| JGA16 6 V 45:1 | 2S | 328 | 0,55 m/s | 15,1 / 2,8 N | 0,45 s | 5° / 15° |
+| JGA16 12 V 25:1 | 3S | 444 | 0,74 m/s | 7,4 / 2,8 N | 0,39 s | 1° / 4° |
+| JGA16 12 V 45:1 | 3S | 246 | 0,41 m/s | 11,3 / 2,8 N | 0,57 s | 0° / 8° |
+| JGA16 12 V 100:1 | 3S | 111 | 0,19 m/s | 26,1 / 2,8 N | 1,16 s | 10° / 17° |
 
 **Leitura:**
 - **Tração manda:** todos os motores são mais fortes que a tração do pneu (μ·N ≈ 2,8 N), então torque a mais não empurra mais.
-- **Redução alta é lenta e empina:** quanto maior a redução, mais lento o robô e maior a inércia refletida (de 0,03 a 1,3 kg equivalentes por roda). Com isso o robô empina mais.
+- **Sobretensão empina:** a mesma ficha rende 1,23× na 2S (6 V) e 0,925× na 3S (12 V). Na 2S, o rotor gira mais rápido e devolve mais momento ao chassi. O N20 HP 6 V 50:1 empina 13° com partida suave; o HPCB 12 V 50:1, na 3S, só 1°.
+- **Redução alta é lenta e empina:** quanto maior a redução, mais lento o robô e maior a inércia refletida (de 0,03 a 1,3 kg equivalentes por roda).
 - **Sobra pouco para 20 cm:** acima de ~1 m/s de velocidade máxima, os 20 cm iniciais já não melhoram (~0,3 s). A tração é que limita a aceleração.
 
 ### S20 × S30
 
-Mesmo robô, N20 HP 50:1, 9 largadas de cada lado:
+Mesmo robô, N20 HP 6 V 50:1 na 2S, 9 largadas de cada lado:
 
 | CG | S20 | S30 |
 |---|---|---|
-| −15,5 mm (como o Fuji) | 1 ponto | **17 pontos** |
+| −15,5 mm (como o Fuji) | 0 pontos | **18 pontos** |
 | +5 mm (20 mm mais à frente) | **4 pontos**, 14 Torinaoshi | 0 pontos |
 
-**Por que o S20 perde com o CG atrás:** mais aderência acelera mais, e com o CG atrás o nariz levanta ~3° e ~2 mm na hora do choque. A lâmina do rival (aresta a 0,2 mm) entra por baixo. Com o CG à frente o nariz não levanta, e o S20 deixa de perder: venceu 4 pontos e não cedeu nenhum.
+**Por que o S20 perde com o CG atrás:** mais aderência acelera mais, e com o CG atrás o nariz levanta na hora do choque. A lâmina do rival (aresta a 0,2 mm) entra por baixo. Com o CG à frente o nariz não levanta, e o S20 deixa de perder: venceu 4 pontos e não cedeu nenhum.
 
 **Em resumo:** aderência só ajuda se o robô não empina.
 
 ### Motores frente a frente
 
-Roda S20, 18 largadas por par. Venceu mais quem empina menos no choque, não quem tem mais torque:
+Roda S20, cada motor na bateria indicada, 18 largadas por par. Venceu mais quem empina menos no choque, não quem tem mais torque:
 
 | Par | Placar |
 |---|---|
-| N20 MP 50:1 × N20 HP 50:1 | 15–0 |
-| JGA16 25:1 × N30 12 V 30:1 | 18–0 |
-| JGA16 45:1 × N20 HP 100:1 | 14–3 |
-| JGA16 45:1 × N20 MP 50:1 | 11–3 |
+| N30 12 V 30:1 × N20 HPCB 12 V 50:1 | 14–4 |
+| N20 MP 6 V 50:1 × N20 HPCB 12 V 50:1 | 10–7 |
+| N20 HPCB 12 V 50:1 × JGA16 6 V 25:1 | 14–0 |
+| N20 MP 6 V 50:1 × N20 HP 6 V 50:1 | 18–0 |
+| N20 HPCB 12 V 50:1 × N20 HP 6 V 50:1 | 18–0 |
+| JGA16 6 V 45:1 × JGA16 6 V 25:1 | 11–0 |
 
-Com a lâmina igual dos dois lados, o lado que levanta o nariz perde a disputa de lâminas.
+- **O N20 HP 6 V 50:1 na 2S perdeu todos os confrontos.** É o mais rápido e o que mais empina (13–14°). Na v10, sem bateria (k = 1), o MP já o vencia por 15–0.
+- **Com a lâmina igual dos dois lados, o lado que levanta o nariz perde a disputa de lâminas.**
 
 ## 5. Motores antigos do Tora e do Fuji, e a troca
 
@@ -191,19 +209,20 @@ Os motores enviados para o Tora (670 RPM, 4,4 kgf·cm) e o Fuji (400 RPM, 3,7 kg
 - **Tora:** empinava ~42° na largada mesmo com partida suave, ficava em pé numa largada seca e podia capotar ao soltar o comando vindo de ré a 100%.
 - **Fuji:** empinava ~23° com partida suave e ~33° numa largada seca.
 
-**Depois da troca**, cada preset ganhou um motor real, um de cada família:
-- Kunai: JGA16-050 32:1;
+**Depois da troca**, cada preset ganhou um motor real, um de cada família. Com as baterias, os três usam a versão de 12 V numa LiPo 3S:
+- Kunai: JGA16-050 12 V 32:1;
 - Tora: N30 12 V 50:1;
-- Fuji: N20 HP 50:1.
+- Fuji: N20 HPCB 12 V 50:1.
 
-Nenhum deles empina com partida suave; a largada seca dá no máximo 8°. A escolha e a análise estão em [ANALISE-ROBOS.md](ANALISE-ROBOS.md), seção "Motor de cada preset". O editor continua avisando a partir de 15° quando um motor personalizado sobra.
+Nenhum deles empina com partida suave; a largada seca dá no máximo 6°. A escolha e a análise estão em [ANALISE-ROBOS.md](ANALISE-ROBOS.md), seção "Motor de cada preset". O editor continua avisando a partir de 15° quando um motor personalizado sobra.
 
 ## Limitações
 
 - **τ estimado:** é o parâmetro mais incerto e muda muito o quanto o robô empina. Meça o seu motor.
 - **μ de um único teste:** o atrito vem de um teste só (JSumo), e o escorregamento no pico é estimativa.
 - **Fora do modelo:**
-  - a queda de tensão da bateria e o limite de corrente do driver;
+  - a descarga e a queda de tensão da bateria sob carga;
+  - o limite de corrente do driver, que só aparece como alerta no editor;
   - a folga e a elasticidade da redução;
-  - o limite de 2 kgf·cm instantâneos da redução N20 (Pololu).
+  - a quebra da caixa N20 acima de 2 kgf·cm instantâneos (Pololu): o editor avisa, mas a caixa não quebra na simulação.
 - **Massa dos motores:** é informativa. A massa do robô continua sendo a que você define.

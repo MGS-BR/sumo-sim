@@ -6,6 +6,7 @@
  *    largada sorteada, cores trocadas.
  * 3) Atribuição: um motor diferente por robô; escolhe a permutação com maior soma de vitórias.
  * 4) Confirmação: onde a 1ª e a 2ª atribuição diferem, o mesmo corpo com cada motor se enfrenta.
+ * Motores de 12 V na 3S (com baterias, as linhas de 6 V só servem na 2S, com sobretensão moderada).
  * Rodar: npm run analise:motores   (não faz parte do `npm test` nem do `npm run analise`; ~35 min)
  */
 import { it } from 'vitest';
@@ -13,24 +14,26 @@ import { Match } from '../src/sim/match';
 import { MODES, PHYSICS_DT } from '../src/sim/modes';
 import { inspect } from '../src/sim/inspection';
 import { theoreticalTopSpeed } from '../src/sim/drive';
-import { MOTOR_PRESETS, applyMotorPreset } from '../src/sim/catalog';
+import { MOTOR_PRESETS, applyMotorPreset, effectiveMotor, recommendedCells } from '../src/sim/catalog';
 import { SparringBot } from '../src/control/sparringBot';
 import type { ControlFrame, RobotSpec } from '../src/sim/types';
 import { robot } from '../tests/fixtures';
 
 const BODIES = ['kunai', 'tora', 'fuji'] as const;
+// versões de 12 V das três famílias, todas na 3S (a bateria compatível com elas; ver analysis/battery.test.ts)
 const FAMILIES = {
-  N20: ['n20hp6-30', 'n20hp6-50', 'n20hp6-75'],
+  N20: ['n20hpcb12-30', 'n20hpcb12-50', 'n20hpcb12-75'],
   N30: ['n30-12-20', 'n30-12-30', 'n30-12-50'],
-  'JGA16-050': ['jga16-6-16', 'jga16-6-25', 'jga16-6-32'],
+  'JGA16-050': ['jga16-12-16', 'jga16-12-25', 'jga16-12-32'],
 } as const;
 type Family = keyof typeof FAMILIES;
-const PANEL_MOTOR: Record<Family, string> = { N20: 'n20hp6-50', N30: 'n30-12-30', 'JGA16-050': 'jga16-6-25' };
+const PANEL_MOTOR: Record<Family, string> = { N20: 'n20hpcb12-50', N30: 'n30-12-30', 'JGA16-050': 'jga16-12-25' };
 const SEEDS = 2;
 
 const build = (body: string, motorId: string): RobotSpec => {
   const s = robot(body);
   applyMotorPreset(s, motorId);
+  s.battery = { cells: recommendedCells(MOTOR_PRESETS.find((m) => m.id === motorId)!.voltage) };
   s.name = `${body}+${motorId}`;
   return s;
 };
@@ -68,7 +71,7 @@ it('motor ideal para cada preset', async () => {
       for (const id of FAMILIES[fam]) {
         const s = build(body, id);
         const d = inspect(s).derived;
-        tri.push(`${body} | ${id} | ${theoreticalTopSpeed(s.motor.freeRpm, s.wheels.radius).toFixed(2)} | ${(d.motorForce / d.maxTraction).toFixed(1)}× | ${d.wheelieDeg.toFixed(0)}°`);
+        tri.push(`${body} | ${id} | ${theoreticalTopSpeed(effectiveMotor(s).freeRpm, s.wheels.radius).toFixed(2)} | ${(d.motorForce / d.maxTraction).toFixed(1)}× | ${d.wheelieDeg.toFixed(0)}°`);
       }
   out.push('## Candidatos\n' + tri.join('\n'));
 

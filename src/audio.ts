@@ -1,4 +1,5 @@
 import type { RobotSpec, SimSnapshot } from './sim/types';
+import { effectiveMotor } from './sim/catalog';
 
 /**
  * Sons sintetizados com WebAudio (sem arquivos):
@@ -304,7 +305,8 @@ export class Sfx {
 
 /** Mistura das camadas do motor a partir do estado do robô (função pura, testável) */
 export function engineMix(r: SimSnapshot['robots'][number], spec: RobotSpec) {
-  const freeOmega = (spec.motor.freeRpm * 2 * Math.PI) / 60;
+  const freeRpm = effectiveMotor(spec).freeRpm;
+  const freeOmega = (freeRpm * 2 * Math.PI) / 60;
   const n = r.wheels.length || 1;
   let speed = 0;
   for (const w of r.wheels) speed += Math.abs(w.omega);
@@ -314,7 +316,7 @@ export function engineMix(r: SimSnapshot['robots'][number], spec: RobotSpec) {
   const current = Math.max(0, u - ratio);
   const on = u > 0.02 || ratio > 0.03 ? 1 : 0;
   // rotor: motores mais rápidos soam mais agudos; parado com tensão ainda "zune" baixo
-  const rotorFree = 170 + spec.motor.freeRpm * 0.28;
+  const rotorFree = 170 + freeRpm * 0.28;
   return {
     ratio,
     current,

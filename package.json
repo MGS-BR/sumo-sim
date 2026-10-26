@@ -12,8 +12,9 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run tests",
     "test:watch": "vitest",
-    "analise": "vitest run analysis --exclude analysis/motorFit.test.ts --silent=false",
-    "analise:motores": "vitest run analysis/motorFit.test.ts --silent=false"
+    "analise": "vitest run analysis --exclude analysis/motorFit.test.ts --exclude analysis/battery.test.ts --silent=false",
+    "analise:motores": "vitest run analysis/motorFit.test.ts --silent=false",
+    "analise:baterias": "vitest run analysis/battery.test.ts --silent=false"
   },
   "dependencies": {
     "@dimforge/rapier3d-deterministic-compat": "0.21.0",

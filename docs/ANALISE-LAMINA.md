@@ -39,21 +39,23 @@ A lâmina é uma rampa. Por isso, **altura = comprimento × sen(ângulo)** e **p
 
 ## Kunai (2 rodas, cunha contínua)
 
-> Rodado de novo com o motor real do preset (JGA16-050 32:1, 375 RPM). Antes ele tinha 800 RPM e 2,4 kgf·cm, e a maioria das largadas terminava em Torinaoshi.
+> Rodado de novo com o motor e a bateria do preset (JGA16-050 12 V 32:1 numa LiPo 3S, 347 RPM na bateria). Os dois lados de cada duelo usam o mesmo motor. Antes das baterias era a JGA16 de 6 V a 375 RPM; no começo ele tinha 800 RPM e 2,4 kgf·cm, e a maioria das largadas terminava em Torinaoshi.
 
 | Variável | Variante | Pontos | Entra por baixo |
 |---|---|---|---|
-| Ângulo | 20° (original 28°; reprovado: a lâmina rouba chassi) | **9/9** | 9/9 |
-| Ângulo | 38° / 48° | 3/9 / 2/9 | 3/9 / 2/9 |
-| Comprimento | 10,2 / 15,4 mm | 4 / 2 | 4 / 2 |
+| Ângulo | 20° (original 28°; reprovado: a lâmina rouba chassi) | **6/9** (1 Torinaoshi) | 6/9 |
+| Ângulo | 38° / 48° | 2/9 / 2/9 | 2/9 / 2/9 |
+| Comprimento | 10,2 / 15,4 mm | 2 / 2 | 2 / 2 |
 | Comprimento | 25,6 (original) / 35,8 / 46,1 mm | 6 / 6 / 6 | 6/9 |
-| Largura, frontal | 99 / 80 / 60 / 40 mm | **6** / 3 / 2 / **0** | 6 / 3 / 2 / 0 |
-| Largura, desalinhado 3 cm | 99 / 80 / 60 / 40 mm | 6 / 7 / 3 / 3 | 3–7/9 |
-| Largura na defesa (quina atacada) | 99 / 80 / 60 / 40 mm | 3 / 3 / 3 / 0 | — |
+| Largura, frontal | 99 / 80 / 60 / 40 mm | **6** / 3 / 3 / 3 | 6 / 3 / 3 / 3 |
+| Largura, desalinhado 3 cm | 99 / 80 / 60 / 40 mm | **9** / 8 / 4 / **0** | 9 / 8 / 3 / 1 |
+| Largura na defesa (quina atacada) | 99 / 80 / 60 / 40 mm | 6 / 3 / 4 / 2 | — |
 
 **Com o motor real, o Kunai deixou de ser caótico:** quase não há Torinaoshi. Duas tendências aparecem:
-- **Ângulo:** rampa deitada entra por baixo (20° fez 9/9; 48° fez 2/9).
-- **Largura:** na cunha contínua, lâmina larga é melhor. Com 40 mm, a variante não entrou por baixo nenhuma vez.
+- **Ângulo:** rampa deitada entra por baixo (20° e 28° fizeram 6/9; 38° e 48°, 2/9).
+- **Largura:** na cunha contínua, lâmina larga é melhor. Desalinhada 3 cm, a de 99 mm fez 9/9 e a de 40 mm, 0/9.
+- **Lâmina curta:** abaixo do original (10–15 mm), o Kunai cai para 2/9.
+- **Bateria:** com a 3S (motor a 0,925× da ficha), os resultados mudaram em detalhes, mas as tendências ficaram as mesmas da versão anterior.
 
 ## O que mudou com o novo modelo de roda
 

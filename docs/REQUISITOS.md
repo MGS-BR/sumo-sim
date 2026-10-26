@@ -40,8 +40,9 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 | RF18 | Ícone da página (dohyo) em SVG, `.ico` (16/32/48 px), PNG 32 px, ícone de toque da Apple e manifesto com 192/512 px. O build de arquivo único embute os ícones. Ícones SVG próprios na interface (sem emojis) e som em todos os botões, por tipo (confirmar, voltar, perigo, seleção) | ✅ |
 | RF19 | Rodas embutidas na chassi: laterais em largura total com caixas de roda em arco e folga ajustável (padrão 2 mm). Opção de rodas por fora no editor. A física usa fatias convexas da mesma forma (erro < 0,6 mm) | ✅ |
 | RF20 | Posicionamento aleatório (opção no menu, desligada por padrão): vale para Realista e Arcade, 2 jogadores, bot e treino. A cada round sorteia giro (0–360°), lateral e distância de cada robô, sempre dentro do Art. 10 e a pelo menos 1 cm do degrau. Os ajustes ficam travados; cada lado só confirma **Pronto**, e o limite de 30 s continua valendo | ✅ |
-| RF21 | Presets de motor (N20 HP e comum, N30 12 V e 5 V, JGA16-050 6 V, por redução) e de roda (RoboCore StickyMAX S20 e S30, 32 mm) no editor, com valores de folha de dados. O editor reconhece o preset pelos valores (sem texto salvo na spec); mexer num campo vira "Personalizado". A ficha mostra as peças, e o editor avisa quando a largada seca pode empinar mais de 15° | ✅ |
+| RF21 | Presets de motor (N20 HP 6 V, comum 6 V e HPCB 12 V; N30 12 V; JGA16-050 6 V e 12 V, por redução; o N30 5 V saiu por não servir em nenhuma bateria) e de roda (RoboCore StickyMAX S20 e S30, 32 mm) no editor, com valores de folha de dados. O editor reconhece o preset pelos valores (sem texto salvo na spec); mexer num campo vira "Personalizado". A ficha mostra as peças, e o editor avisa quando a largada seca pode empinar mais de 15° | ✅ |
 | RF22 | Modo treino: uma caixa passiva (100 × 100 × 50 mm, 500 g, μ 0,4) no lugar do adversário. Vale nos dois modos e com posicionamento aleatório (a caixa também é sorteada). O juiz não cobra movimento da caixa; o HUD e a tela final mostram o tempo do bip até a caixa encostar fora | ✅ |
+| RF23 | Baterias LiPo 2S, 3S e 4S (sem descarga na luta). A física escala rotação, torque e corrente do motor por V_bateria ÷ V_motor. O editor mostra a compatibilidade motor × bateria (sobretensão, subtensão, calor travado, caixa N20, corrente do pack e da ponte H) com cores por nível, e a ficha mostra um selo. Nenhuma combinação é bloqueada. Análise em [ANALISE-BATERIAS.md](ANALISE-BATERIAS.md) | ✅ |
 
 ## 3. Requisitos não funcionais
 
@@ -62,6 +63,7 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 - **Chassi e lâmina:** cascos convexos gerados da spec. Lâmina com atrito baixo (aço ~0,2), chassi ~0,4.
 - **Rodas (modelo próprio, não colisores):** raycast por roda contra o dohyo/chão. Suspensão rígida (9000 N/m por roda, com pré-carga compensando a deflexão estática). Isso dá a carga **N** em cada roda.
 - **Motor DC:** τ = τ_travamento · (u − ω/ω_livre), com u = PWM e limite de corrente de ±τ_travamento. Com u = 0 o motor freia (curto), e o atrito da redução segura o robô parado.
+- **Bateria:** LiPo 2S/3S/4S a 3,7 V por célula (sem descarga). Rotação livre, torque e corrente de travamento da ficha valem na tensão nominal do motor e são multiplicados por k = V_bateria ÷ V_motor; a constante de tempo e a inércia refletida não mudam. Os alertas de sobretensão usam a bateria cheia (4,2 V por célula).
 - **Roda com inércia:**
   - A rotação de cada roda é um estado. A inércia soma a da roda e a do rotor refletida pela redução: J = τ_mecânico·T_travamento/ω_livre.
   - A roda demora para acelerar, patina, é arrastada e gira no ar.
@@ -72,9 +74,10 @@ Legenda: ✅ implementado · 🔜 previsto na arquitetura, não implementado
 - **Detecção de "tocar fora":** qualquer colisor tocando o chão de fora, ou uma roda apoiada fora do dohyo.
 
 **Validação (testes automatizados):**
-- Velocidade de regime de cada preset dentro de 90–102% da teórica (RPM × raio), com partida suave.
+- Velocidade de regime de cada preset dentro de 90–102% da teórica (RPM na bateria × raio), com partida suave.
+- O mesmo N30 12 V anda 1,8–2,1× mais rápido na 4S que na 2S (razão de tensão 2), e a inércia refletida do rotor não muda com a bateria.
 - Roda solta chega a 63% da rotação livre em t = τ; força nunca passa de μ·N; parado não gera força (sem drift).
-- Com partida suave nenhum preset capota; o mesmo robô com motor e roda do catálogo empina menos de 15° mesmo com largada seca.
+- Com partida suave nenhum preset capota; o mesmo robô com motor e roda do catálogo, na bateria indicada, empina menos de 15° mesmo com largada seca. Com sobretensão (6 V na 2S) empina mais, mas não capota.
 - Todos os presets são limitados por tração, não por motor: a força dos motores passa da tração μ·N.
 - Robôs de teste Trator (aresta a 0,2 mm, 20°) contra Bloco (aresta a 0,5 mm): durante o contato, o Bloco fica com menos de 90% do peso nas rodas e o Trator com mais de 100%; o Bloco sai primeiro.
 - Robô parado não escorrega (< 1 mm e < 0,1° em 3 s), para cada preset.
@@ -189,9 +192,11 @@ analysis/         análises longas (npm run analise): lâmina, presets, motores,
 
 | Preset | Empurrão reto, posição padrão | Bot difícil, posição aleatória (20 sementes) |
 |---|---|---|
-| Kunai (JGA16) | 0,95 s | 20/20 · média 1,43 s (1,12–1,92) |
-| Tora (N30) | 1,19 s | 20/20 · média 1,61 s (1,30–1,84) |
-| Fuji (N20) | 0,85 s | 20/20 · média 1,28 s (0,99–1,57) |
+| Kunai (JGA16) | 1,03 s | 20/20 · média 1,48 s (1,18–2,19) |
+| Tora (N30) | 1,28 s | 20/20 · média 1,72 s (1,42–1,97) |
+| Fuji (N20) | 0,88 s | 20/20 · média 1,32 s (1,01–1,66) |
+
+Presets com motor de 12 V na 3S (0,925× a ficha); por isso os tempos subiram ~5–8% em relação à versão sem bateria.
 
 - **A física da caixa confere:**
   - abaixo de μ·m·g ela não escorrega (só ~1–2 mm de acomodação do contato);
@@ -203,8 +208,8 @@ analysis/         análises longas (npm run analise): lâmina, presets, motores,
   | Robô desligado | Resultado |
   |---|---|
   | Tora | nenhum preset tirou |
-  | Fuji | só o Tora tirou, em 4,9 s |
-  | Kunai | Kunai tirou em 1,1 s e Tora em 1,3 s; o Fuji não tirou |
+  | Fuji | Tora em 2,6 s e Fuji em 2,4 s; o Kunai não tirou |
+  | Kunai | Fuji em 1,0 s e Tora em 1,4 s; o Kunai não tirou |
 - **Conclusão:** o treino mede aproximação e mira, não força de empurrar.
 
 ## 8. Roadmap
@@ -230,12 +235,12 @@ analysis/         análises longas (npm run analise): lâmina, presets, motores,
 - Exportar/importar robôs (JSON).
 - Mega Sumô e Sumô LEGO reaproveitando a mesma base (dimensões e limites já isolados).
 
-Análise detalhada de comprimento, largura e ângulo da lâmina: [ANALISE-LAMINA.md](ANALISE-LAMINA.md). Análise dos presets (Kunai, Tora, Fuji): [ANALISE-ROBOS.md](ANALISE-ROBOS.md). Motores, rodas e o modelo de roda: [ANALISE-RODAS-MOTORES.md](ANALISE-RODAS-MOTORES.md).
+Análise detalhada de comprimento, largura e ângulo da lâmina: [ANALISE-LAMINA.md](ANALISE-LAMINA.md). Análise dos presets (Kunai, Tora, Fuji): [ANALISE-ROBOS.md](ANALISE-ROBOS.md). Motores, rodas e o modelo de roda: [ANALISE-RODAS-MOTORES.md](ANALISE-RODAS-MOTORES.md). Baterias e compatibilidade motor × bateria: [ANALISE-BATERIAS.md](ANALISE-BATERIAS.md).
 
 ## 9. Limitações conhecidas
 - A constante de tempo do motor (inércia do rotor) é estimada; ela muda muito o quanto o robô empina. Dá para medir filmando a roda solta em câmera lenta.
 - O atrito dos pneus StickyMAX vem de um único teste (JSumo, madeira laminada); o escorregamento no pico é estimativa.
-- Fora do modelo: queda de tensão da bateria, limite de corrente do driver e folga da redução.
+- Fora do modelo: descarga e queda de tensão da bateria sob carga, limite de corrente do driver (só alerta) e folga da redução.
 - O bot de treino "vê" a posição real do rival (não usa sensores).
 - Não há dano nem quebra de lâmina (Nota 14). Ela não se aplica a uma lâmina indestrutível.
 - Detecção de "mesma órbita" (Art. 12) não implementada.
